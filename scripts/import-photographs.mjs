@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 
+import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
 import { analyseImage, imageMetadata } from "../lib/photographs/analyse-image.mjs";
@@ -12,6 +13,8 @@ import {
   PHOTOGRAPH_BUCKET,
   PHOTOGRAPH_UPLOAD_FORMATS,
 } from "../lib/photographs/config.mjs";
+
+nextEnv.loadEnvConfig(process.cwd());
 
 const usage = `Usage: npm run photos:import -- [options] <image> [image ...]
 
@@ -29,8 +32,9 @@ Options:
   --dry-run               Validate and analyze images without uploading.
   --help                  Show this help.
 
-Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment before an
-upload. Example: npm run photos:import -- --manifest photos.json photo1.jpg photo2.webp`;
+Set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY
+in .env.local or the environment before an upload.
+Example: npm run photos:import -- --manifest photos.json photo1.jpg photo2.webp`;
 
 const valueOptions = {
   "--manifest": "manifestPath",
@@ -138,10 +142,10 @@ function sortOrder(value) {
 }
 
 function clientFromEnvironment() {
-  const url = process.env.SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceRoleKey) {
-    throw new Error("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before uploading.");
+    throw new Error("Set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY before uploading.");
   }
 
   return createClient(url, serviceRoleKey, {

@@ -12,6 +12,7 @@
     "storage:setup": "node scripts/setup-photograph-storage.mjs"
   },
   "dependencies": {
+    "@next/env": "16.3.6",
     "@supabase/supabase-js": "2.112.4",
     "exif-reader": "2.0.3",
     "motion": "^13.4.1",
