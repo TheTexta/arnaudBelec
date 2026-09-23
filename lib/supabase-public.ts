@@ -14,6 +14,7 @@ export type PublicPhotograph = {
   height: number;
   title: string | null;
   altText: string | null;
+  backgroundHex: string | null;
   palette: PaletteColour[];
   hasPaletteAnalysis: boolean;
 };
@@ -26,6 +27,7 @@ type CatalogueRow = {
   image_height: unknown;
   title: unknown;
   alt_text: unknown;
+  background_hex: unknown;
   palette: unknown;
 };
 
@@ -89,6 +91,9 @@ function photographFromRow(row: CatalogueRow, storageRoot: string): PublicPhotog
     height: row.image_height,
     title: typeof row.title === "string" ? row.title : null,
     altText: typeof row.alt_text === "string" ? row.alt_text : null,
+    backgroundHex: typeof row.background_hex === "string" && /^#[0-9a-fA-F]{6}$/.test(row.background_hex)
+      ? row.background_hex.toLowerCase()
+      : null,
     palette,
     hasPaletteAnalysis: palette.length > 0,
   };
@@ -109,6 +114,7 @@ function photographFromStorageObject(row: StorageObjectRow, storageRoot: string)
     height: 1067,
     title: null,
     altText: null,
+    backgroundHex: null,
     palette: [],
     hasPaletteAnalysis: false,
   };
@@ -119,7 +125,7 @@ async function loadPublishedPhotographs(storageRoot: string, anonKey: string): P
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const query = new URLSearchParams({
-      select: "id,storage_path,filename,image_width,image_height,title,alt_text,palette:arnaud_photo_palette_colours(rank,hex,lab_l,lab_a,lab_b,weight)",
+      select: "id,storage_path,filename,image_width,image_height,title,alt_text,background_hex,palette:arnaud_photo_palette_colours(rank,hex,lab_l,lab_a,lab_b,weight)",
       order: "sort_order.asc.nullslast,captured_at.desc.nullslast,filename.desc",
       limit: String(PAGE_SIZE),
       offset: String(offset),

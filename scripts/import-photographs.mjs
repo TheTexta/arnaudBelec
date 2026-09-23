@@ -19,7 +19,7 @@ nextEnv.loadEnvConfig(process.cwd());
 const usage = `Usage: npm run photos:import -- [options] <image> [image ...]
 
 Uploads JPEG, PNG, and WebP photographs to the ${PHOTOGRAPH_BUCKET} bucket and
-publishes their image metadata and five-colour palettes in one database RPC.
+publishes their image metadata and seven-colour OKLab k-medoids palettes in one database RPC.
 
 Options:
   --manifest <file>       JSON object keyed by an image argument or basename.
@@ -200,6 +200,7 @@ async function prepareImage(fileArgument, defaults, manifest) {
       p_sample_longest_side: analysis.sample_longest_side,
       p_palette_size: analysis.palette_size,
       p_analyzed_at: analysis.analyzed_at,
+      p_background_hex: analysis.background_hex,
       p_colours: analysis.colours,
     },
   };

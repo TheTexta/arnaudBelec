@@ -1,25 +1,29 @@
 "use client";
 
 import Image from "next/image";
-import { motion, useAnimationFrame, useMotionValue } from "motion/react";
+import Link from "next/link";
+import { useAnimationFrame } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { findSimilarPhotographs } from "@/lib/photographs/similar-colours";
+import { foregroundForBackground } from "@/lib/photographs/page-colours";
 import type { PaletteColour, PublicPhotograph } from "@/lib/supabase-public";
-import { advanceParticle, containParticle, type CollisionBounds, type Particle } from "./gradient-physics";
+import { GradientOrb, type MeasuredBounds } from "./gradient-orb";
 
 const colours = [
-  { id: "slate", name: "Slate blue", hex: "#7995ae", x: 0.06, y: 0.2, vx: 7.5, vy: 4.5 },
-  { id: "rose", name: "Dusty rose", hex: "#dcabb8", x: 0.88, y: 0.13, vx: -7, vy: 5.5 },
-  { id: "indigo", name: "Indigo", hex: "#293b70", x: 0.06, y: 0.79, vx: 6, vy: -7.5 },
-  { id: "lilac", name: "Lilac", hex: "#a59dbe", x: 0.49, y: 0.96, vx: -8, vy: -5 },
-  { id: "pearl", name: "Pearl pink", hex: "#f0dce3", x: 0.98, y: 0.83, vx: -6.5, vy: -7 },
+  { id: "slate", name: "palette colour 1", hex: "#7995ae", vx: 7.5, vy: 4.5 },
+  { id: "rose", name: "palette colour 2", hex: "#dcabb8", vx: -7, vy: 5.5 },
+  { id: "indigo", name: "palette colour 3", hex: "#293b70", vx: 6, vy: -7.5 },
+  { id: "lilac", name: "palette colour 4", hex: "#a59dbe", vx: -8, vy: -5 },
+  { id: "pearl", name: "palette colour 5", hex: "#f0dce3", vx: -6.5, vy: -7 },
+  { id: "mint", name: "palette colour 6", hex: "#8ec5b4", vx: 6.5, vy: 5 },
+  { id: "amber", name: "palette colour 7", hex: "#d9b47d", vx: -7.5, vy: 6 },
 ] as const;
 
 type ColourId = (typeof colours)[number]["id"];
 type ColourSlot = Omit<(typeof colours)[number], "hex"> & { hex: string };
 type GradientColour = ColourSlot & { lab: readonly [number, number, number]; weight: number };
 
-type ClassifiedPhotograph = PublicPhotograph & {
-  colour: ColourId | null;
+type GalleryPhotograph = PublicPhotograph & {
   figureStyle?: CSSProperties;
   imageClassName?: string;
   imageStyle?: CSSProperties;
@@ -48,42 +52,6 @@ const defaultGradientColours: GradientColour[] = colours.map((colour) => ({
   weight: 1 / colours.length,
 }));
 
-function gradientDiameterVw(weight: number): number {
-  const equalShare = 1 / colours.length;
-  const difference = Math.max(0, Math.min(1, weight)) - equalShare;
-  const scaledDifference = difference < 0
-    ? difference / equalShare
-    : difference / (1 - equalShare);
-
-  return 100 + scaledDifference * 25;
-}
-
-function nearestGradient(palette: PaletteColour[], gradients: GradientColour[]): ColourId | null {
-  const visibleColours = palette.filter((colour) => colour.weight > 0);
-  if (visibleColours.length === 0) return null;
-
-  let closest: ColourId = gradients[0].id;
-  let closestDistance = Infinity;
-
-  for (const gradient of gradients) {
-    // A palette colour's share weights its CIE Lab distance to the gradient.
-    const distance = visibleColours.reduce((sum, colour) => {
-      const [lightness, greenRed, blueYellow] = gradient.lab;
-      return sum + colour.weight * Math.hypot(
-        colour.labL - lightness,
-        colour.labA - greenRed,
-        colour.labB - blueYellow,
-      );
-    }, 0);
-    if (distance < closestDistance) {
-      closest = gradient.id;
-      closestDistance = distance;
-    }
-  }
-
-  return closest;
-}
-
 const galleryItems = [
   ["slate", 0.95, "25% 51%", "grayscale(1) contrast(1.1)"],
   ["indigo", 1.28, "69% 51%", "hue-rotate(80deg) saturate(.8)"],
@@ -100,7 +68,18 @@ const galleryItems = [
   ["rose", 0.86, "32% 45%", "hue-rotate(300deg) saturate(1.3) brightness(1.08)"],
   ["pearl", 1.2, "78% 48%", "hue-rotate(250deg) saturate(.45) brightness(1.2)"],
   ["lilac", 0.73, "43% 57%", "hue-rotate(45deg) saturate(.72)"],
+  ["mint", 1.12, "47% 52%", "hue-rotate(145deg) saturate(.8)"],
+  ["amber", 0.94, "57% 48%", "sepia(.75) saturate(1.2)"],
+  ["mint", 0.86, "35% 56%", "hue-rotate(160deg) saturate(.7)"],
+  ["amber", 1.23, "69% 51%", "sepia(.6) saturate(1.3)"],
+  ["mint", 1.37, "28% 49%", "hue-rotate(130deg) saturate(.9)"],
+  ["amber", 0.78, "74% 61%", "sepia(.8) saturate(1.1)"],
 ] as const satisfies readonly (readonly [ColourId, number, string, string])[];
+
+function testColour(hex: string): PaletteColour {
+  const [labL, labA, labB] = hexToLab(hex);
+  return { hex, labL, labA, labB, weight: 1 };
+}
 
 const testPaletteByColour = {
   slate: { hex: "#0c0907", labL: 2.6094, labA: 0.5361, labB: 1.0431, weight: 1 },
@@ -108,9 +87,11 @@ const testPaletteByColour = {
   indigo: { hex: "#35130b", labL: 10.8982, labA: 16.3768, labB: 12.1471, weight: 1 },
   lilac: { hex: "#7e2c1a", labL: 30.1853, labA: 34.514, labB: 29.7925, weight: 1 },
   pearl: { hex: "#e1d0d0", labL: 84.8295, labA: 5.8887, labB: 2.118, weight: 1 },
+  mint: testColour("#8ec5b4"),
+  amber: testColour("#d9b47d"),
 } satisfies Record<ColourId, PaletteColour>;
 
-const testPhotographs: ClassifiedPhotograph[] = galleryItems.map(([colour, ratio, position, filter], index) => {
+const testPhotographs: GalleryPhotograph[] = galleryItems.map(([colour, ratio, position, filter], index) => {
   const paletteColour = testPaletteByColour[colour];
 
   return {
@@ -121,16 +102,14 @@ const testPhotographs: ClassifiedPhotograph[] = galleryItems.map(([colour, ratio
     height: 1348,
     title: null,
     altText: "Temporary test image of purple and slate radial gradients",
+    backgroundHex: null,
     palette: [paletteColour],
     hasPaletteAnalysis: true,
-    colour,
     figureStyle: { aspectRatio: ratio },
     imageClassName: "block size-full scale-[1.7] object-cover",
     imageStyle: { objectPosition: position, filter },
   };
 });
-
-type MeasuredBounds = CollisionBounds & { version: number };
 
 function closestColourAt(
   stage: HTMLElement,
@@ -164,101 +143,13 @@ function closestColourAt(
   return closest;
 }
 
-function GradientOrb({
-  colour,
-  isSelected,
-  isHovered,
-  boundsRef,
-  onKeyboardSelect,
-}: {
-  colour: GradientColour;
-  isSelected: boolean;
-  isHovered: boolean;
-  boundsRef: { current: MeasuredBounds | null };
-  onKeyboardSelect: () => void;
-}) {
-  const offsetX = useMotionValue(0);
-  const offsetY = useMotionValue(0);
-  const particleRef = useRef<Particle>({ x: 0, y: 0, vx: colour.vx, vy: colour.vy });
-  const previousBoundsRef = useRef<MeasuredBounds | null>(null);
-  const reducedMotionRef = useRef(false);
-
-  useEffect(() => {
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = () => { reducedMotionRef.current = preference.matches; };
-    updatePreference();
-    preference.addEventListener("change", updatePreference);
-    return () => preference.removeEventListener("change", updatePreference);
-  }, []);
-
-  const updatePosition = useCallback((_: number, delta: number) => {
-    const bounds = boundsRef.current;
-    if (!bounds) return;
-
-    const particle = particleRef.current;
-    const previousBounds = previousBoundsRef.current;
-    if (previousBounds?.version !== bounds.version) {
-      if (previousBounds) {
-        particle.x *= bounds.width / previousBounds.width;
-        particle.y *= bounds.height / previousBounds.height;
-      } else {
-        particle.x = colour.x * bounds.width;
-        particle.y = colour.y * bounds.height;
-      }
-      containParticle(particle, bounds);
-      previousBoundsRef.current = bounds;
-    }
-
-    if (!reducedMotionRef.current) advanceParticle(particle, bounds, delta);
-    offsetX.set(particle.x - colour.x * bounds.width);
-    offsetY.set(particle.y - colour.y * bounds.height);
-  }, [boundsRef, colour, offsetX, offsetY]);
-
-  useAnimationFrame(updatePosition);
-
-  return (
-    <motion.div
-      className="pointer-events-none absolute z-1"
-      style={{ left: `${colour.x * 100}%`, top: `${colour.y * 100}%`, x: offsetX, y: offsetY }}
-    >
-      <button
-        className="group pointer-events-auto grid aspect-square -translate-x-1/2 -translate-y-1/2 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 transition-[width] duration-[700ms] focus-visible:outline-none motion-reduce:transition-none [-webkit-tap-highlight-color:transparent]"
-        style={{ width: `${gradientDiameterVw(colour.weight)}vw` }}
-        type="button"
-        data-colour-orb={colour.id}
-        data-hovered={isHovered}
-        aria-label={`Show ${colour.name} photographs`}
-        aria-pressed={isSelected}
-        onClick={(event) => {
-          if (event.detail === 0) onKeyboardSelect();
-        }}
-      >
-        <span
-          aria-hidden="true"
-          className={`orb-glow pointer-events-none absolute inset-0 rounded-full opacity-70 blur-[clamp(18px,3vw,65px)] transition-[scale] duration-[450ms] motion-reduce:transition-none ${isSelected ? "scale-[2]" : "scale-100"}`}
-          style={{ "--orb-colour": colour.hex } as CSSProperties}
-        />
-        <span
-          aria-hidden="true"
-          className={[
-            "relative size-5 rounded-full border border-white/95 bg-white/15 shadow-[0_1px_12px_rgba(29,35,55,0.15)] transition-[opacity,scale] duration-[250ms] group-focus-visible:shadow-[0_0_0_3px_#fff,0_1px_12px_rgba(29,35,55,0.15)] motion-reduce:transition-none",
-            isSelected || isHovered
-              ? "scale-100 opacity-100"
-              : "scale-[.65] opacity-35 group-focus-visible:scale-100 group-focus-visible:opacity-100",
-          ].join(" ")}
-        />
-      </button>
-    </motion.div>
-  );
-}
-
 export default function PhotoPage({ photographs }: { photographs: PublicPhotograph[] }) {
   const [selectedColour, setSelectedColour] = useState<ColourId | null>(null);
   const [hoveredColour, setHoveredColour] = useState<ColourId | null>(null);
   const [displayedColour, setDisplayedColour] = useState<ColourId | null>(null);
   const [isFading, setIsFading] = useState(false);
   const stageRef = useRef<HTMLElement>(null);
-  const photoRef = useRef<HTMLButtonElement>(null);
+  const photoRef = useRef<HTMLElement | null>(null);
   const boundsRef = useRef<MeasuredBounds | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const hoveredRef = useRef<ColourId | null>(null);
@@ -338,10 +229,11 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
     };
   }, [selectedColour, displayedColour]);
 
-  const sourcePhotographs: (PublicPhotograph | ClassifiedPhotograph)[] = photographs.length > 0
+  const sourcePhotographs: GalleryPhotograph[] = photographs.length > 0
     ? photographs
     : testPhotographs;
   const heroPhotograph = sourcePhotographs[0];
+  const pageBackground = heroPhotograph?.backgroundHex ?? "#ffffff";
   const gradientColours = useMemo<GradientColour[]>(() => {
     const palette = heroPhotograph?.palette.slice(0, colours.length) ?? [];
 
@@ -358,26 +250,75 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
     });
   }, [heroPhotograph]);
 
-  const classifiedPhotographs = useMemo<ClassifiedPhotograph[]>(
-    () => {
-      if (photographs.length === 0) return testPhotographs;
-
-      return photographs.map((photograph) => ({
-        ...photograph,
-        colour: nearestGradient(photograph.palette, gradientColours),
-      }));
-    },
-    [gradientColours, photographs],
-  );
   const hasSupabasePhotographs = photographs.length > 0;
-  const hasAnalysedPhotographs = classifiedPhotographs.some((photograph) => photograph.hasPaletteAnalysis);
-  const shownPhotographs = displayedColour
-    ? classifiedPhotographs.filter((photograph) => photograph.colour === displayedColour)
-    : classifiedPhotographs;
+  const heroHref = hasSupabasePhotographs && heroPhotograph
+    ? `/photos/${encodeURIComponent(heroPhotograph.filename)}`
+    : null;
+  const hasAnalysedPhotographs = sourcePhotographs.some((photograph) => photograph.hasPaletteAnalysis);
+  const shownPhotographs = useMemo(() => {
+    if (!displayedColour || !heroPhotograph) return sourcePhotographs;
+
+    const paletteIndex = colours.findIndex((colour) => colour.id === displayedColour);
+    if (paletteIndex < 0) return sourcePhotographs;
+
+    const hasCompletePalette = heroPhotograph.palette.length >= colours.length;
+    const selectedGradient = gradientColours[paletteIndex];
+    const source = hasCompletePalette ? heroPhotograph : {
+      ...heroPhotograph,
+      palette: [{
+        hex: selectedGradient.hex,
+        labL: selectedGradient.lab[0],
+        labA: selectedGradient.lab[1],
+        labB: selectedGradient.lab[2],
+        weight: 1,
+      }],
+    };
+
+    return findSimilarPhotographs(
+      source,
+      sourcePhotographs,
+      hasCompletePalette ? paletteIndex : 0,
+      { includeCurrent: true },
+    );
+  }, [displayedColour, gradientColours, heroPhotograph, sourcePhotographs]);
   const selectedName = colours.find((colour) => colour.id === selectedColour)?.name;
+  const heroAspectRatio = heroPhotograph ? heroPhotograph.width / heroPhotograph.height : 1680 / 1348;
+  const heroStyle = {
+    aspectRatio: heroAspectRatio,
+    "--photo-max-width": `${80 * heroAspectRatio}vh`,
+  } as CSSProperties;
+  const heroImage = heroPhotograph ? (
+    <Image
+      key={heroPhotograph.id}
+      src={heroPhotograph.src}
+      alt={heroPhotograph.altText?.trim() || heroPhotograph.title?.trim() || "Photograph by Arnaud Belec"}
+      width={heroPhotograph.width}
+      height={heroPhotograph.height}
+      priority
+      loading="eager"
+      sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
+      className="block h-auto w-full object-contain"
+    />
+  ) : (
+    <Image
+      src="/test-image.jpg"
+      alt="Temporary test image of purple and slate radial gradients"
+      width={1680}
+      height={1348}
+      priority
+      loading="eager"
+      sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
+      className="block h-auto w-full object-contain"
+    />
+  );
+  const setPhotoRef = useCallback((element: HTMLElement | null) => { photoRef.current = element; }, []);
+  const heroClassName = "relative z-2 block w-[min(calc(100vw_-_32px),var(--photo-max-width))] cursor-pointer border-0 bg-white p-0 focus-visible:outline-[3px] focus-visible:outline-offset-[6px] focus-visible:outline-current sm:w-[min(66.6667vw,var(--photo-max-width))]";
 
   return (
-    <main className="w-full overflow-clip">
+    <main
+      className="min-h-svh w-full overflow-clip"
+      style={{ backgroundColor: pageBackground, color: foregroundForBackground(pageBackground) }}
+    >
       <h1 className="sr-only">Arnaud Belec photographs</h1>
 
       <section
@@ -393,6 +334,7 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
           <GradientOrb
             key={colour.id}
             colour={colour}
+            paletteSize={gradientColours.length}
             isSelected={selectedColour === colour.id}
             isHovered={hoveredColour === colour.id}
             boundsRef={boundsRef}
@@ -400,40 +342,28 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
           />
         ))}
 
-        <button
-          ref={photoRef}
-          className="relative z-2 block aspect-[3/2] w-[min(66.6667vw,calc(150vh_-_72px))] cursor-pointer overflow-hidden border-0 bg-[#121117] p-0 focus-visible:outline-[3px] focus-visible:outline-offset-[6px] focus-visible:outline-white max-[900px]:w-[min(calc(100vw_-_48px),calc(150vh_-_72px))]"
-          type="button"
-          onClick={() => setSelectedColour(null)}
-          aria-label="Show all photographs"
-          title="Show all photographs"
-        >
-          {heroPhotograph ? (
-            <Image
-              key={heroPhotograph.id}
-              src={heroPhotograph.src}
-              alt={heroPhotograph.altText?.trim() || heroPhotograph.title?.trim() || "Photograph by Arnaud Belec"}
-              width={heroPhotograph.width}
-              height={heroPhotograph.height}
-              priority
-              loading="eager"
-              sizes="(max-width: 900px) calc(100vw - 48px), 66vw"
-              className={"imageClassName" in heroPhotograph ? heroPhotograph.imageClassName : "block size-full object-cover"}
-              style={"imageStyle" in heroPhotograph ? heroPhotograph.imageStyle : undefined}
-            />
-          ) : (
-            <Image
-              src="/test-image.jpg"
-              alt="Temporary test image of purple and slate radial gradients"
-              width={1680}
-              height={1348}
-              priority
-              loading="eager"
-              sizes="(max-width: 900px) calc(100vw - 48px), 66vw"
-              className="block size-full scale-[1.58] object-cover object-[50%_53%]"
-            />
-          )}
-        </button>
+        {heroHref ? (
+          <Link
+            ref={setPhotoRef}
+            href={heroHref}
+            className={heroClassName}
+            style={heroStyle}
+            aria-label={`View photograph ${heroPhotograph?.title?.trim() || heroPhotograph?.filename}`}
+          >
+            {heroImage}
+          </Link>
+        ) : (
+          <button
+            ref={setPhotoRef}
+            className={heroClassName}
+            style={heroStyle}
+            type="button"
+            onClick={() => setSelectedColour(null)}
+            aria-label="Show all photographs"
+          >
+            {heroImage}
+          </button>
+        )}
       </section>
 
       <section className="flex flex-col justify-center items-center w-full min-w-[320px]" aria-label="Photograph gallery">
@@ -447,12 +377,8 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
               : `Showing all ${shownPhotographs.length} analysed test image variations.`}
         </p>
         <div className={`columns-3 gap-x-[clamp(8px,0.65vw,16px)] transition-opacity motion-reduce:transition-none max-[900px]:columns-2 max-[900px]:gap-x-2 ${isFading ? "opacity-0 duration-100" : "opacity-100 duration-300"}`}>
-          {shownPhotographs.map((photograph) => (
-            <figure
-              className="mb-[clamp(8px,0.65vw,16px)] block w-full break-inside-avoid overflow-hidden bg-[#b6b4be] max-[900px]:mb-2"
-              key={photograph.id}
-              style={photograph.figureStyle}
-            >
+          {shownPhotographs.map((photograph) => {
+            const image = (
               <Image
                 src={photograph.src}
                 alt={hasSupabasePhotographs ? photograph.altText?.trim() || photograph.title?.trim() || "Photograph by Arnaud Belec" : ""}
@@ -463,11 +389,29 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
                 className={photograph.imageClassName ?? "block h-auto w-full"}
                 style={photograph.imageStyle}
               />
-            </figure>
-          ))}
+            );
+
+            return (
+              <figure
+                className="mb-[clamp(8px,0.65vw,16px)] block w-full break-inside-avoid overflow-hidden bg-[#b6b4be] max-[900px]:mb-2"
+                key={photograph.id}
+                style={photograph.figureStyle}
+              >
+                {hasSupabasePhotographs ? (
+                  <Link
+                    href={`/photos/${encodeURIComponent(photograph.filename)}`}
+                    className="block focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-current"
+                    aria-label={`View photograph ${photograph.title?.trim() || photograph.filename}`}
+                  >
+                    {image}
+                  </Link>
+                ) : image}
+              </figure>
+            );
+          })}
         </div>
         {hasSupabasePhotographs && displayedColour && shownPhotographs.length === 0 && (
-          <p className="px-6 py-16 text-center text-sm text-[#55515c]">
+          <p className="px-6 py-16 text-center text-sm opacity-70">
             {hasAnalysedPhotographs
               ? "No photographs match this colour yet."
               : "No analysed palettes match this colour yet. Import photographs with palette analysis to enable colour filtering."}

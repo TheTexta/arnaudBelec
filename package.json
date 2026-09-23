@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:palette": "node --test lib/palette/*.test.mjs",
     "photos:import": "node scripts/import-photographs.mjs",
+    "photos:reanalyze": "node scripts/reanalyse-photographs.mjs",
     "storage:setup": "node scripts/setup-photograph-storage.mjs"
   },
   "dependencies": {

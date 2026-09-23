@@ -15,6 +15,39 @@ export type Particle = {
 // the photo, which sits above the gradients in the stacking order.
 const radius = 10;
 
+export function randomParticlePosition(bounds: CollisionBounds): { x: number; y: number } {
+  const left = radius;
+  const right = Math.max(left, bounds.width - radius);
+  const top = radius;
+  const bottom = Math.max(top, bounds.height - radius);
+  const photoTop = Math.max(top, bounds.photo.top - radius);
+  const photoBottom = Math.min(bottom, bounds.photo.bottom + radius);
+  const rectangles = [
+    { left, right, top, bottom: photoTop },
+    { left, right, top: photoBottom, bottom },
+    { left, right: Math.min(right, bounds.photo.left - radius), top: photoTop, bottom: photoBottom },
+    { left: Math.max(left, bounds.photo.right + radius), right, top: photoTop, bottom: photoBottom },
+  ].filter((rect) => rect.right > rect.left && rect.bottom > rect.top);
+  const totalArea = rectangles.reduce((sum, rect) =>
+    sum + (rect.right - rect.left) * (rect.bottom - rect.top), 0);
+
+  if (totalArea === 0) return { x: left, y: top };
+
+  let chosenArea = Math.random() * totalArea;
+  for (const rect of rectangles) {
+    const area = (rect.right - rect.left) * (rect.bottom - rect.top);
+    if (chosenArea < area) {
+      return {
+        x: rect.left + Math.random() * (rect.right - rect.left),
+        y: rect.top + Math.random() * (rect.bottom - rect.top),
+      };
+    }
+    chosenArea -= area;
+  }
+
+  return { x: left, y: top };
+}
+
 export function containParticle(particle: Particle, bounds: CollisionBounds) {
   if (particle.x < radius) {
     particle.x = radius;
