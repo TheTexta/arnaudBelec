@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@utility orb-glow {
+  background: radial-gradient(
+    circle,
+    var(--orb-colour) 0%,
+    color-mix(in srgb, var(--orb-colour) 75%, transparent) 30%,
+    transparent 72%
+  );
+}
