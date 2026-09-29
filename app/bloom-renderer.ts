@@ -80,6 +80,10 @@ export function createBloomRenderer(canvas: HTMLCanvasElement) {
         // Draw the selectable orbs into the same image as the gradients. Screen
         // each four-CSS-pixel sample against the finished background colour.
         vec3 screened = sRGBTransferOETF(vec4(colour, 1.0)).rgb;
+        vec2 orbNoiseCell = floor(pixel / 4.0);
+        vec2 orbSample = orbNoiseCell * 4.0 + 2.0;
+        float orbSeed = fract(sin(dot(orbNoiseCell, vec2(12.9898, 78.233)) + uOrbFrame * 37.719) * 43758.5453);
+        float orbNoise = orbSeed - 0.5;
         for (int i = 0; i < ${MAX_COLOURS}; i++) {
           vec4 orb = uOrbs[i];
           if (orb.w == 0.0) continue;
@@ -87,27 +91,27 @@ export function createBloomRenderer(canvas: HTMLCanvasElement) {
           vec2 local = pixel - orb.xy;
           float orbScale = uOrbScale[i];
           float distancePx = length(local) / orbScale;
-          if (distancePx > 48.0) continue;
+          if (distancePx > 56.0) continue;
 
           float orbActivity = uOrbActive[i];
           float softGlow = (1.0 - smoothstep(16.0, 48.0, distancePx)) * (0.2 + orbActivity * 0.12);
           screened = 1.0 - (1.0 - screened) * (1.0 - uColours[i] * softGlow);
 
-          // Keep grain cells at 4 CSS pixels while the orb occupies more cells.
-          vec2 orbCell = floor(local / 4.0) + vec2(8.0);
-          float cellDistance = length(orbCell - vec2(7.5)) / orbScale;
-          if (cellDistance > 7.5) continue;
+          // Sample the orb on the same screen-space cells as its shared noise.
+          float cellDistance = length(orbSample - orb.xy) / (4.0 * orbScale);
+          float colourRadius = (0.70710678 + 7.5) / 2.0;
+          float edgeRadius = colourRadius + (7.5 - colourRadius) * 2.5;
+          if (cellDistance > edgeRadius) continue;
 
-          float orbSeed = fract(sin(dot(orbCell, vec2(12.9898, 78.233)) + uOrbFrame * 37.719) * 43758.5453);
-          float orbNoise = orbSeed - 0.5;
-          float core = 1.0 - step(3.6, cellDistance);
-          float glow = max(0.0, 1.0 - max(0.0, cellDistance - 3.4) / 4.1);
-          float highlight = core * max(0.0, 1.0 - cellDistance / 4.0) * 0.28;
-          float grain = mix(orbNoise * 0.2, orbNoise * 0.45, core);
-          float light = mix(0.08 + glow * 0.12, 0.13 + highlight, core);
-          vec3 orbColour = clamp(uColours[i] * (1.0 + grain) + (1.0 - uColours[i]) * light, 0.0, 1.0);
-          float orbAlpha = mix(185.0 / 255.0 * glow * (0.85 + orbNoise * 0.3), 1.0, core);
-          screened = 1.0 - (1.0 - screened) * (1.0 - orbColour * orbAlpha);
+          float innerFade = clamp((cellDistance - 0.70710678) / (colourRadius - 0.70710678), 0.0, 1.0);
+          float outerFade = clamp((cellDistance - colourRadius) / (edgeRadius - colourRadius), 0.0, 1.0);
+          float outerAlpha = (exp(-3.0 * outerFade) - exp(-3.0)) / (1.0 - exp(-3.0));
+          float whiteMix = 1.0 - innerFade;
+          float grainFade = cellDistance <= colourRadius
+            ? min(innerFade, 1.0 - innerFade) * 2.0
+            : min(outerFade, 1.0 - outerFade) * 2.0;
+          vec3 orbColour = clamp(mix(uColours[i], vec3(1.0), whiteMix) * (1.0 + orbNoise * 0.2 * grainFade), 0.0, 1.0);
+          screened = 1.0 - (1.0 - screened) * (1.0 - orbColour * outerAlpha);
         }
         colour = sRGBTransferEOTF(vec4(screened, 1.0)).rgb;
         gl_FragColor = vec4(colour, 1.0);

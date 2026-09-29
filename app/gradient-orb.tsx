@@ -3,6 +3,7 @@
 import { motion, useAnimationFrame, useMotionValue } from "motion/react";
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { advanceParticle, containParticle, randomParticlePosition, type CollisionBounds, type Particle } from "./gradient-physics";
+import { orbNoiseAt } from "./orb-noise";
 
 export type GradientOrbColour = {
   id: string;
@@ -15,10 +16,14 @@ export type GradientOrbColour = {
 
 export type MeasuredBounds = CollisionBounds & { version: number };
 
-const ORB_PIXELS = 32;
+const ORB_PIXELS = 64;
+const ORB_COLOUR_RADIUS = (Math.SQRT1_2 + 7.5) / 2;
+const ORB_EDGE_RADIUS = ORB_COLOUR_RADIUS + (7.5 - ORB_COLOUR_RADIUS) * 2.5;
+const ORB_OUTER_EXP_END = Math.exp(-3);
 export const ORB_GRAIN_FRAME_MS = 60;
 
-function drawPixelOrb(canvas: HTMLCanvasElement, hex: string, frame: number, scale: number) {
+function drawPixelOrb(canvas: HTMLCanvasElement, hex: string, frame: number, scale: number,
+  noiseCellX: number, noiseCellY: number, centreCellX: number, centreCellY: number) {
   const context = canvas.getContext("2d");
   if (!context) return;
 
@@ -29,22 +34,24 @@ function drawPixelOrb(canvas: HTMLCanvasElement, hex: string, frame: number, sca
 
   for (let y = 0; y < ORB_PIXELS; y++) {
     for (let x = 0; x < ORB_PIXELS; x++) {
-      const distance = Math.hypot(x - 15.5, y - 15.5) / scale;
-      if (distance > 7.5) continue;
+      const distance = Math.hypot(x - centreCellX, y - centreCellY) / scale;
+      if (distance > ORB_EDGE_RADIUS) continue;
 
-      // Match the screen grain's hash, with each sample enlarged to a 4px square.
-      const seed = Math.sin((x - 8) * 12.9898 + (y - 8) * 78.233 + frame * 37.719) * 43758.5453;
-      const noise = seed - Math.floor(seed) - 0.5;
-      const core = distance <= 3.6;
-      const glow = Math.max(0, 1 - Math.max(0, distance - 3.4) / 4.1);
-      const highlight = core ? Math.max(0, 1 - distance / 4) * 0.28 : 0;
-      const grain = core ? noise * 0.45 : noise * 0.2;
-      const light = core ? 0.13 + highlight : 0.08 + glow * 0.12;
+      const noise = orbNoiseAt(noiseCellX + x, noiseCellY + y, frame);
+      // Keep the centre white as it moves across the shared screen-space cells.
+      const innerFade = Math.max(0, Math.min(1, (distance - Math.SQRT1_2) / (ORB_COLOUR_RADIUS - Math.SQRT1_2)));
+      const outerFade = Math.max(0, Math.min(1, (distance - ORB_COLOUR_RADIUS) / (ORB_EDGE_RADIUS - ORB_COLOUR_RADIUS)));
+      const outerAlpha = (Math.exp(-3 * outerFade) - ORB_OUTER_EXP_END) / (1 - ORB_OUTER_EXP_END);
+      const whiteMix = 1 - innerFade;
+      const grainFade = distance <= ORB_COLOUR_RADIUS
+        ? Math.min(innerFade, 1 - innerFade) * 2
+        : Math.min(outerFade, 1 - outerFade) * 2;
       const index = (y * ORB_PIXELS + x) * 4;
       for (const [channel, value] of [red, green, blue].entries()) {
-        image.data[index + channel] = Math.max(0, Math.min(255, value * (1 + grain) + (255 - value) * light));
+        const colour = value * (1 - whiteMix) + 255 * whiteMix;
+        image.data[index + channel] = Math.max(0, Math.min(255, colour * (1 + noise * 0.2 * grainFade)));
       }
-      image.data[index + 3] = core ? 255 : Math.round(185 * glow * (0.85 + noise * 0.3));
+      image.data[index + 3] = Math.round(255 * outerAlpha);
     }
   }
 
@@ -102,7 +109,8 @@ export function GradientOrb({
   const offsetY = useMotionValue(0);
   const spawnOpacity = useMotionValue(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastGrainRef = useRef<{ hex: string; frame: number; scale: number } | null>(null);
+  const lastGrainRef = useRef<{ hex: string; frame: number; scale: number; noiseCellX: number; noiseCellY: number;
+    centreCellX: number; centreCellY: number } | null>(null);
   const selectionScaleRef = useRef(1);
   const particleRef = useRef<Particle>({ x: 0, y: 0, vx: colour.vx, vy: colour.vy });
   const previousBoundsRef = useRef<MeasuredBounds | null>(null);
@@ -126,11 +134,6 @@ export function GradientOrb({
     selectionScaleRef.current = selectionScale;
     const scale = gradientDiameterVw(colour.weight, paletteSize) / 100 * selectionScale
       * orbPulseScale(colour.id, colour.weight, paletteSize, time, reducedMotionRef.current);
-    if (canvasRef.current && (lastGrainRef.current?.hex !== colour.hex || lastGrainRef.current.frame !== frame || lastGrainRef.current.scale !== scale)) {
-      drawPixelOrb(canvasRef.current, colour.hex, frame, scale);
-      lastGrainRef.current = { hex: colour.hex, frame, scale };
-    }
-
     const bounds = boundsRef.current;
     if (!bounds) return;
 
@@ -157,6 +160,30 @@ export function GradientOrb({
     offsetY.set(particle.y);
     onPositionChange?.(colour.id, particle.x, particle.y);
     spawnOpacity.set(1);
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (canvas.closest<HTMLElement>("[data-orb-renderer]")?.dataset.orbRenderer === "webgl") {
+      lastGrainRef.current = null;
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const baseLeft = rect.left - (parseFloat(canvas.style.marginLeft) || 0);
+    const baseTop = rect.top - (parseFloat(canvas.style.marginTop) || 0);
+    const alignedLeft = Math.floor(baseLeft / 4) * 4;
+    const alignedTop = Math.floor(baseTop / 4) * 4;
+    canvas.style.marginLeft = `${alignedLeft - baseLeft}px`;
+    canvas.style.marginTop = `${alignedTop - baseTop}px`;
+    const noiseCellX = alignedLeft / 4;
+    const noiseCellY = alignedTop / 4;
+    const centreCellX = (baseLeft + rect.width / 2 - alignedLeft) / 4 - 0.5;
+    const centreCellY = (baseTop + rect.height / 2 - alignedTop) / 4 - 0.5;
+    if (lastGrainRef.current?.hex !== colour.hex || lastGrainRef.current.frame !== frame || lastGrainRef.current.scale !== scale
+      || lastGrainRef.current.noiseCellX !== noiseCellX || lastGrainRef.current.noiseCellY !== noiseCellY
+      || lastGrainRef.current.centreCellX !== centreCellX || lastGrainRef.current.centreCellY !== centreCellY) {
+      drawPixelOrb(canvas, colour.hex, frame, scale, noiseCellX, noiseCellY, centreCellX, centreCellY);
+      lastGrainRef.current = { hex: colour.hex, frame, scale, noiseCellX, noiseCellY, centreCellX, centreCellY };
+    }
   }, [boundsRef, colour.hex, colour.id, colour.weight, isSelected, offsetX, offsetY, onPositionChange, paletteSize, positionsRef, spawnOpacity]);
 
   useAnimationFrame(updatePosition);
@@ -169,7 +196,7 @@ export function GradientOrb({
       style={{ x: offsetX, y: offsetY, opacity: spawnOpacity }}
     >
       <button
-        className="group pointer-events-auto grid aspect-square -translate-x-1/2 -translate-y-1/2 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 transition-[width] duration-[700ms] focus-visible:outline-none motion-reduce:transition-none [-webkit-tap-highlight-color:transparent]"
+        className="group pointer-events-auto relative grid aspect-square -translate-x-1/2 -translate-y-1/2 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 transition-[width] duration-[700ms] focus-visible:outline-none motion-reduce:transition-none [-webkit-tap-highlight-color:transparent]"
         style={{ width: `${diameterVw}vw`, "--orb-focus-size": `${64 * diameterVw / 100 * (isSelected ? 1.5 : 1)}px` } as CSSProperties}
         type="button"
         data-colour-orb={colour.id}
@@ -185,7 +212,7 @@ export function GradientOrb({
           width={ORB_PIXELS}
           height={ORB_PIXELS}
           aria-hidden="true"
-          className="pixel-orb size-32"
+          className="pixel-orb pointer-events-none absolute top-1/2 left-1/2 size-64 -translate-x-1/2 -translate-y-1/2"
           data-active={isSelected || isHovered}
           style={{ "--orb-colour": colour.hex } as CSSProperties}
         />
