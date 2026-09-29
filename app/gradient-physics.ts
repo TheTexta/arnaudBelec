@@ -15,7 +15,10 @@ export type Particle = {
 // the photo, which sits above the gradients in the stacking order.
 const radius = 10;
 
-export function randomParticlePosition(bounds: CollisionBounds): { x: number; y: number } {
+export function randomParticlePosition(
+  bounds: CollisionBounds,
+  occupied: ReadonlyArray<{ x: number; y: number }> = [],
+): { x: number; y: number } {
   const left = radius;
   const right = Math.max(left, bounds.width - radius);
   const top = radius;
@@ -33,19 +36,40 @@ export function randomParticlePosition(bounds: CollisionBounds): { x: number; y:
 
   if (totalArea === 0) return { x: left, y: top };
 
-  let chosenArea = Math.random() * totalArea;
-  for (const rect of rectangles) {
-    const area = (rect.right - rect.left) * (rect.bottom - rect.top);
-    if (chosenArea < area) {
-      return {
-        x: rect.left + Math.random() * (rect.right - rect.left),
-        y: rect.top + Math.random() * (rect.bottom - rect.top),
-      };
+  const sample = () => {
+    let chosenArea = Math.random() * totalArea;
+    for (const rect of rectangles) {
+      const area = (rect.right - rect.left) * (rect.bottom - rect.top);
+      if (chosenArea < area) {
+        return {
+          x: rect.left + Math.random() * (rect.right - rect.left),
+          y: rect.top + Math.random() * (rect.bottom - rect.top),
+        };
+      }
+      chosenArea -= area;
     }
-    chosenArea -= area;
-  }
+    return { x: left, y: top };
+  };
 
-  return { x: left, y: top };
+  let best = sample();
+  if (occupied.length === 0) return best;
+
+  // Compare random points from the free area and keep one with room around it.
+  const clearanceFrom = (candidate: { x: number; y: number }) => occupied.reduce((nearest, point) => {
+    const dx = candidate.x - point.x;
+    const dy = candidate.y - point.y;
+    return Math.min(nearest, dx * dx + dy * dy);
+  }, Infinity);
+  let bestClearance = clearanceFrom(best);
+  for (let i = 0; i < occupied.length * 4 + 12; i++) {
+    const candidate = sample();
+    const clearance = clearanceFrom(candidate);
+    if (clearance > bestClearance) {
+      best = candidate;
+      bestClearance = clearance;
+    }
+  }
+  return best;
 }
 
 export function containParticle(particle: Particle, bounds: CollisionBounds) {

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useAnimationFrame } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { BloomLayer, type OrbPositions } from "@/app/bloom-layer";
 import { GradientOrb, type GradientOrbColour, type MeasuredBounds } from "@/app/gradient-orb";
 import { findSimilarPhotographs } from "@/lib/photographs/similar-colours";
 import { foregroundForBackground } from "@/lib/photographs/page-colours";
@@ -62,6 +63,7 @@ export default function PhotoDetail({
   const stageRef = useRef<HTMLElement>(null);
   const photoRef = useRef<HTMLButtonElement>(null);
   const boundsRef = useRef<MeasuredBounds | null>(null);
+  const orbPositionsRef = useRef<OrbPositions>({});
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const hoveredRef = useRef<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,9 @@ export default function PhotoDetail({
     [hasPalette, photograph, photographs, selectedPaletteIndex],
   );
   const imageAlt = photograph.altText?.trim() || photograph.title?.trim() || "Photograph by Arnaud Belec";
+  const updateOrbPosition = useCallback((id: string, x: number, y: number) => {
+    orbPositionsRef.current[id] = { x, y };
+  }, []);
 
   const updateHoveredGradient = useCallback(() => {
     const stage = stageRef.current;
@@ -166,23 +171,23 @@ export default function PhotoDetail({
         color: foregroundForBackground(photograph.backgroundHex),
       }}
     >
-      <Link
-        href="/"
-        className="fixed top-4 left-4 z-20 rounded-sm bg-white/90 px-2 py-1 text-sm font-medium text-black underline decoration-transparent underline-offset-4 backdrop-blur-sm transition-[text-decoration-color] hover:decoration-current focus-visible:decoration-current focus-visible:outline-none"
-        aria-label="Arnaud Belec — back to all photographs"
-      >
-        Arnaud Belec
-      </Link>
 
       <section
         ref={stageRef}
-        className="relative isolate grid h-svh w-full place-items-center overflow-hidden"
+        className="relative isolate grid h-svh w-full place-items-center"
         aria-label="Photograph and its palette gradients"
         onPointerEnter={trackPointer}
         onPointerMove={trackPointer}
         onPointerLeave={clearPointer}
         onPointerDown={selectAtPointer}
       >
+        <BloomLayer
+          backgroundColour={photograph.backgroundHex ?? "#ffffff"}
+          colours={gradients}
+          positionsRef={orbPositionsRef}
+          selectedId={selectedPaletteIndex?.toString() ?? null}
+          hoveredId={hoveredPaletteIndex?.toString() ?? null}
+        />
         {gradients.map((colour, index) => (
           <GradientOrb
             key={colour.id}
@@ -191,6 +196,8 @@ export default function PhotoDetail({
             isSelected={selectedPaletteIndex === index}
             isHovered={hoveredPaletteIndex === index}
             boundsRef={boundsRef}
+            positionsRef={orbPositionsRef}
+            onPositionChange={updateOrbPosition}
             onKeyboardSelect={() => {
               setSelectedPaletteIndex((current) => current === index ? null : index);
               setVisibleCount(PAGE_SIZE);
@@ -222,6 +229,7 @@ export default function PhotoDetail({
               width={photograph.width}
               height={photograph.height}
               priority
+              loading="eager"
               sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
               className="block h-full w-full object-contain"
             />
@@ -229,7 +237,7 @@ export default function PhotoDetail({
         </figure>
       </section>
 
-      <div className="px-4 sm:px-[calc(100vw/6)]">
+      <div className="relative z-3 px-4 sm:px-[calc(100vw/6)]">
         <section className="pt-4 pb-12" aria-label="Similar photographs">
           <h1 className="sr-only">{photograph.title?.trim() || photograph.filename}</h1>
           <h2 className="sr-only">Similar photographs</h2>

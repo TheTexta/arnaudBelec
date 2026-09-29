@@ -4,9 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useAnimationFrame } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { BloomLayer, type OrbPositions } from "./bloom-layer";
 import { findSimilarPhotographs } from "@/lib/photographs/similar-colours";
 import { foregroundForBackground } from "@/lib/photographs/page-colours";
-import type { PaletteColour, PublicPhotograph } from "@/lib/supabase-public";
+import type { PublicPhotograph } from "@/lib/supabase-public";
 import { GradientOrb, type MeasuredBounds } from "./gradient-orb";
 
 const colours = [
@@ -52,64 +53,6 @@ const defaultGradientColours: GradientColour[] = colours.map((colour) => ({
   weight: 1 / colours.length,
 }));
 
-const galleryItems = [
-  ["slate", 0.95, "25% 51%", "grayscale(1) contrast(1.1)"],
-  ["indigo", 1.28, "69% 51%", "hue-rotate(80deg) saturate(.8)"],
-  ["pearl", 0.8, "77% 55%", "hue-rotate(240deg) saturate(.55) brightness(1.2)"],
-  ["lilac", 1.34, "34% 48%", "hue-rotate(35deg) saturate(.6)"],
-  ["rose", 0.84, "42% 61%", "hue-rotate(305deg) saturate(1.25)"],
-  ["slate", 1.07, "58% 44%", "grayscale(.75) brightness(.9)"],
-  ["pearl", 1.43, "83% 42%", "hue-rotate(260deg) saturate(.55) brightness(1.1)"],
-  ["indigo", 0.75, "63% 58%", "hue-rotate(85deg) saturate(.95) brightness(.8)"],
-  ["rose", 1.18, "31% 58%", "hue-rotate(310deg) saturate(1.1)"],
-  ["lilac", 0.91, "48% 44%", "hue-rotate(25deg) saturate(.85)"],
-  ["slate", 0.79, "21% 60%", "grayscale(.55) contrast(1.18)"],
-  ["indigo", 1.38, "73% 63%", "hue-rotate(95deg) saturate(.85)"],
-  ["rose", 0.86, "32% 45%", "hue-rotate(300deg) saturate(1.3) brightness(1.08)"],
-  ["pearl", 1.2, "78% 48%", "hue-rotate(250deg) saturate(.45) brightness(1.2)"],
-  ["lilac", 0.73, "43% 57%", "hue-rotate(45deg) saturate(.72)"],
-  ["mint", 1.12, "47% 52%", "hue-rotate(145deg) saturate(.8)"],
-  ["amber", 0.94, "57% 48%", "sepia(.75) saturate(1.2)"],
-  ["mint", 0.86, "35% 56%", "hue-rotate(160deg) saturate(.7)"],
-  ["amber", 1.23, "69% 51%", "sepia(.6) saturate(1.3)"],
-  ["mint", 1.37, "28% 49%", "hue-rotate(130deg) saturate(.9)"],
-  ["amber", 0.78, "74% 61%", "sepia(.8) saturate(1.1)"],
-] as const satisfies readonly (readonly [ColourId, number, string, string])[];
-
-function testColour(hex: string): PaletteColour {
-  const [labL, labA, labB] = hexToLab(hex);
-  return { hex, labL, labA, labB, weight: 1 };
-}
-
-const testPaletteByColour = {
-  slate: { hex: "#0c0907", labL: 2.6094, labA: 0.5361, labB: 1.0431, weight: 1 },
-  rose: { hex: "#ce6140", labL: 54.0709, labA: 40.8578, labB: 38.8667, weight: 1 },
-  indigo: { hex: "#35130b", labL: 10.8982, labA: 16.3768, labB: 12.1471, weight: 1 },
-  lilac: { hex: "#7e2c1a", labL: 30.1853, labA: 34.514, labB: 29.7925, weight: 1 },
-  pearl: { hex: "#e1d0d0", labL: 84.8295, labA: 5.8887, labB: 2.118, weight: 1 },
-  mint: testColour("#8ec5b4"),
-  amber: testColour("#d9b47d"),
-} satisfies Record<ColourId, PaletteColour>;
-
-const testPhotographs: GalleryPhotograph[] = galleryItems.map(([colour, ratio, position, filter], index) => {
-  const paletteColour = testPaletteByColour[colour];
-
-  return {
-    id: `test-${colour}-${index}`,
-    src: "/test-image.jpg",
-    filename: "test-image.jpg",
-    width: 1680,
-    height: 1348,
-    title: null,
-    altText: "Temporary test image of purple and slate radial gradients",
-    backgroundHex: null,
-    palette: [paletteColour],
-    hasPaletteAnalysis: true,
-    figureStyle: { aspectRatio: ratio },
-    imageClassName: "block size-full scale-[1.7] object-cover",
-    imageStyle: { objectPosition: position, filter },
-  };
-});
 
 function closestColourAt(
   stage: HTMLElement,
@@ -151,6 +94,7 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
   const stageRef = useRef<HTMLElement>(null);
   const photoRef = useRef<HTMLElement | null>(null);
   const boundsRef = useRef<MeasuredBounds | null>(null);
+  const orbPositionsRef = useRef<OrbPositions>({});
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const hoveredRef = useRef<ColourId | null>(null);
 
@@ -229,9 +173,7 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
     };
   }, [selectedColour, displayedColour]);
 
-  const sourcePhotographs: GalleryPhotograph[] = photographs.length > 0
-    ? photographs
-    : testPhotographs;
+  const sourcePhotographs: GalleryPhotograph[] = photographs;
   const heroPhotograph = sourcePhotographs[0];
   const pageBackground = heroPhotograph?.backgroundHex ?? "#ffffff";
   const gradientColours = useMemo<GradientColour[]>(() => {
@@ -299,19 +241,11 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
       sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
       className="block h-auto w-full object-contain"
     />
-  ) : (
-    <Image
-      src="/test-image.jpg"
-      alt="Temporary test image of purple and slate radial gradients"
-      width={1680}
-      height={1348}
-      priority
-      loading="eager"
-      sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
-      className="block h-auto w-full object-contain"
-    />
-  );
+  ) : null;
   const setPhotoRef = useCallback((element: HTMLElement | null) => { photoRef.current = element; }, []);
+  const updateOrbPosition = useCallback((id: string, x: number, y: number) => {
+    orbPositionsRef.current[id] = { x, y };
+  }, []);
   const heroClassName = "relative z-2 block w-[min(calc(100vw_-_32px),var(--photo-max-width))] cursor-pointer border-0 bg-white p-0 focus-visible:outline-[3px] focus-visible:outline-offset-[6px] focus-visible:outline-current sm:w-[min(66.6667vw,var(--photo-max-width))]";
 
   return (
@@ -319,17 +253,22 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
       className="min-h-svh w-full overflow-clip"
       style={{ backgroundColor: pageBackground, color: foregroundForBackground(pageBackground) }}
     >
-      <h1 className="sr-only">Arnaud Belec photographs</h1>
-
       <section
         ref={stageRef}
-        className="relative isolate grid h-screen w-screen place-items-center overflow-hidden"
+        className="relative isolate grid h-screen w-screen place-items-center"
         aria-label="Select a colour to explore photographs"
         onPointerEnter={trackPointer}
         onPointerMove={trackPointer}
         onPointerLeave={clearPointer}
         onPointerDown={selectAtPointer}
       >
+        <BloomLayer
+          backgroundColour={pageBackground}
+          colours={gradientColours}
+          positionsRef={orbPositionsRef}
+          selectedId={selectedColour}
+          hoveredId={hoveredColour}
+        />
         {gradientColours.map((colour) => (
           <GradientOrb
             key={colour.id}
@@ -338,43 +277,50 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
             isSelected={selectedColour === colour.id}
             isHovered={hoveredColour === colour.id}
             boundsRef={boundsRef}
+            positionsRef={orbPositionsRef}
+            onPositionChange={updateOrbPosition}
             onKeyboardSelect={() => setSelectedColour((current) => current === colour.id ? null : colour.id)}
           />
         ))}
 
-        {heroHref ? (
-          <Link
-            ref={setPhotoRef}
-            href={heroHref}
-            className={heroClassName}
-            style={heroStyle}
-            aria-label={`View photograph ${heroPhotograph?.title?.trim() || heroPhotograph?.filename}`}
-          >
-            {heroImage}
-          </Link>
+        {heroPhotograph ? (
+          heroHref ? (
+            <Link
+              ref={setPhotoRef}
+              href={heroHref}
+              className={heroClassName}
+              style={heroStyle}
+              aria-label={`View photograph ${heroPhotograph.title?.trim() || heroPhotograph.filename}`}
+            >
+              {heroImage}
+            </Link>
+          ) : (
+            <button
+              ref={setPhotoRef}
+              className={heroClassName}
+              style={heroStyle}
+              type="button"
+              onClick={() => setSelectedColour(null)}
+              aria-label="Show all photographs"
+            >
+              {heroImage}
+            </button>
+          )
         ) : (
-          <button
+          <div
             ref={setPhotoRef}
             className={heroClassName}
             style={heroStyle}
-            type="button"
-            onClick={() => setSelectedColour(null)}
-            aria-label="Show all photographs"
-          >
-            {heroImage}
-          </button>
+            aria-label="No photographs available"
+          />
         )}
       </section>
 
-      <section className="flex flex-col justify-center items-center w-full min-w-[320px]" aria-label="Photograph gallery">
+      <section className="relative z-3 flex flex-col justify-center items-center w-full min-w-[320px] py-4" aria-label="Photograph gallery">
         <p className="sr-only" aria-live="polite">
-          {hasSupabasePhotographs
-            ? selectedName
-              ? `Showing ${shownPhotographs.length} ${selectedName} photographs.`
-              : `Showing all ${shownPhotographs.length} photographs.`
-            : selectedName
-              ? `Showing ${shownPhotographs.length} ${selectedName} analysed test image variations.`
-              : `Showing all ${shownPhotographs.length} analysed test image variations.`}
+          {selectedName
+            ? `Showing ${shownPhotographs.length} ${selectedName} photographs.`
+            : `Showing all ${shownPhotographs.length} photographs.`}
         </p>
         <div className={`columns-3 gap-x-[clamp(8px,0.65vw,16px)] transition-opacity motion-reduce:transition-none max-[900px]:columns-2 max-[900px]:gap-x-2 ${isFading ? "opacity-0 duration-100" : "opacity-100 duration-300"}`}>
           {shownPhotographs.map((photograph) => {
@@ -385,7 +331,7 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
                 width={photograph.width}
                 height={photograph.height}
                 sizes="(max-width: 900px) 50vw, 22vw"
-                loading="lazy"
+                loading={photograph.id === heroPhotograph?.id ? "eager" : "lazy"}
                 className={photograph.imageClassName ?? "block h-auto w-full"}
                 style={photograph.imageStyle}
               />
@@ -410,11 +356,11 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
             );
           })}
         </div>
-        {hasSupabasePhotographs && displayedColour && shownPhotographs.length === 0 && (
+        {displayedColour && shownPhotographs.length === 0 && (
           <p className="px-6 py-16 text-center text-sm opacity-70">
             {hasAnalysedPhotographs
               ? "No photographs match this colour yet."
-              : "No analysed palettes match this colour yet. Import photographs with palette analysis to enable colour filtering."}
+              : "No analysed palettes match this colour yet."}
           </p>
         )}
       </section>

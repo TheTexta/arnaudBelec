@@ -8,3 +8,37 @@
     transparent 72%
   );
 }
+
+.pixel-orb {
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 8px var(--orb-colour));
+  transition: filter 250ms;
+}
+
+[data-orb-renderer="webgl"] .pixel-orb {
+  opacity: 0;
+}
+
+[data-orb-renderer="webgl"] .group:focus-visible::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--orb-focus-size);
+  height: var(--orb-focus-size);
+  border: 2px solid white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.pixel-orb[data-active="true"] {
+  filter: drop-shadow(0 0 10px var(--orb-colour)) drop-shadow(0 0 22px var(--orb-colour));
+}
+
+.group:focus-visible .pixel-orb {
+  filter: drop-shadow(0 0 2px white) drop-shadow(0 0 10px white) drop-shadow(0 0 20px var(--orb-colour));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-orb { transition: none; }
+}
