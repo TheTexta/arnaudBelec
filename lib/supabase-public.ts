@@ -22,6 +22,7 @@ export type PublicPhotograph = {
 type CatalogueRow = {
   id: unknown;
   storage_path: unknown;
+  storage_provider?: unknown;
   filename: unknown;
   image_width: unknown;
   image_height: unknown;
@@ -65,6 +66,7 @@ function isPaletteColour(value: unknown): value is {
 function photographFromRow(row: CatalogueRow, storageRoot: string): PublicPhotograph | null {
   if (
     typeof row.id !== "string" ||
+    (row.storage_provider !== undefined && row.storage_provider !== "supabase" && row.storage_provider !== "r2") ||
     typeof row.storage_path !== "string" ||
     !STORAGE_PATH.test(row.storage_path) ||
     typeof row.filename !== "string" ||
@@ -85,7 +87,9 @@ function photographFromRow(row: CatalogueRow, storageRoot: string): PublicPhotog
 
   return {
     id: row.id,
-    src: `${storageRoot}/storage/v1/object/public/${BUCKET}/${objectPath}`,
+    src: row.storage_provider === "r2"
+      ? `https://media.dextery.dev/arnaudbelec/${objectPath}`
+      : `${storageRoot}/storage/v1/object/public/${BUCKET}/${objectPath}`,
     filename: row.filename,
     width: row.image_width,
     height: row.image_height,
@@ -125,7 +129,8 @@ async function loadPublishedPhotographs(storageRoot: string, anonKey: string): P
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const query = new URLSearchParams({
-      select: "id,storage_path,filename,image_width,image_height,title,alt_text,background_hex,palette:arnaud_photo_palette_colours(rank,hex,lab_l,lab_a,lab_b,weight)",
+      // Selecting the row keeps older, pre-provider schemas readable too.
+      select: "*,palette:arnaud_photo_palette_colours(rank,hex,lab_l,lab_a,lab_b,weight)",
       order: "sort_order.asc.nullslast,captured_at.desc.nullslast,filename.desc",
       limit: String(PAGE_SIZE),
       offset: String(offset),

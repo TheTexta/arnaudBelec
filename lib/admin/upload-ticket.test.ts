@@ -42,3 +42,10 @@ test("upload input rejects traversal, oversized files and invalid capture dates"
   assert.equal(capturedDate("", "20260929-portrait.jpg"), "2026-09-29");
   assert.throws(() => capturedDate("2026-02-30", "portrait.jpg"));
 });
+
+test("R2 provider is signed and unknown providers are rejected", () => {
+  const signed = createUploadTicket(ticket({ provider: "r2" }), signingSecret);
+  assert.equal(verifyUploadTicket(signed, signingSecret, adminId).provider, "r2");
+  const invalid = { ...ticket(), provider: "other" } as unknown as UploadTicket;
+  assert.throws(() => verifyUploadTicket(createUploadTicket(invalid, signingSecret), signingSecret, adminId));
+});

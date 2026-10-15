@@ -10,11 +10,15 @@
     "typecheck": "tsc --noEmit",
     "test:palette": "node --test lib/palette/*.test.mjs",
     "test:admin": "tsx --test lib/admin/*.test.ts",
+    "test:storage": "tsx --test lib/photographs/*.test.mjs lib/photographs/*.test.ts",
+    "photos:migrate-r2": "node scripts/migrate-photographs-to-r2.mjs",
     "photos:import": "node scripts/import-photographs.mjs",
     "photos:reanalyze": "node scripts/reanalyse-photographs.mjs",
     "storage:setup": "node scripts/setup-photograph-storage.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@next/env": "16.3.6",
     "@supabase/supabase-js": "2.112.4",
     "exif-reader": "2.0.3",
@@ -27,6 +31,7 @@
     "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22",
     "@types/react": "^19",

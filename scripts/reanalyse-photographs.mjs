@@ -4,7 +4,8 @@ import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
 import { analyseImage } from "../lib/photographs/analyse-image.mjs";
-import { PHOTOGRAPH_BUCKET, PHOTOGRAPH_PALETTE_SIZE } from "../lib/photographs/config.mjs";
+import { PHOTOGRAPH_PALETTE_SIZE } from "../lib/photographs/config.mjs";
+import { readPhotograph } from "../lib/photographs/storage.mjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 
@@ -31,7 +32,7 @@ async function publishedPhotographs() {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("arnaud_photographs")
-      .select("id,storage_path,filename")
+      .select("*")
       .order("id")
       .range(offset, offset + pageSize - 1);
 
@@ -49,13 +50,8 @@ async function main() {
 
   // Analyse every stored image before replacing any database rows.
   for (const photograph of photographs) {
-    const { data, error } = await supabase.storage
-      .from(PHOTOGRAPH_BUCKET)
-      .download(photograph.storage_path);
-    if (error) throw new Error(`${photograph.filename}: ${error.message}`);
-
     const analysis = await analyseImage(
-      Buffer.from(await data.arrayBuffer()),
+      await readPhotograph(supabase, photograph),
       photograph.id,
     );
     if (analysis.colours.length !== PHOTOGRAPH_PALETTE_SIZE) {

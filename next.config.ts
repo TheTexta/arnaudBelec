@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const remotePatterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [];
+remotePatterns.push({ protocol: "https", hostname: "media.dextery.dev", pathname: "/arnaudbelec/uploads/**", search: "" });
 const publicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 if (publicSupabaseUrl) {

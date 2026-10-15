@@ -3,8 +3,11 @@ import { PHOTOGRAPH_BUCKET } from "@/lib/photographs/config.mjs";
 import { adminErrorResponse, AdminRequestError, authorizeAdmin } from "@/lib/admin/server";
 import { storagePathFor, verifyUploadTicket } from "@/lib/admin/upload-ticket";
 import { capturedDate, optionalText, sortOrder, validateDimensions, validateFilename } from "@/lib/admin/validation";
+import { reservationFor, verifyAndPromote } from "@/lib/admin/r2-upload";
+import { r2Storage } from "@/lib/photographs/storage.mjs";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 function responseForPublished(filename: string) {
   return Response.json({ filename, href: `/photos/${encodeURIComponent(filename)}` }, {
@@ -33,6 +36,8 @@ export async function POST(request: Request) {
     const path = storagePathFor(ticket);
     const { format } = validateFilename(ticket.filename);
     const bucket = service.storage.from(PHOTOGRAPH_BUCKET);
+    const isR2 = ticket.provider === "r2";
+    if (isR2) await reservationFor(service, ticket);
 
     const { data: alreadyPublished, error: existingError } = await service.from("arnaud_photographs")
       .select("filename,storage_path").eq("id", ticket.photographId).maybeSingle();
@@ -44,7 +49,9 @@ export async function POST(request: Request) {
       return responseForPublished(ticket.filename);
     }
 
-    const { data: object, error: objectError } = await bucket.info(path);
+    const { data: object, error: objectError } = isR2
+      ? { data: { size: ticket.size, contentType: format.contentType }, error: null }
+      : await bucket.info(path);
     if (objectError || !object) throw new AdminRequestError("The uploaded file is missing. Retry the upload.", 409, "upload_missing");
 
     try {
@@ -107,10 +114,20 @@ export async function POST(request: Request) {
         p_background_hex: analysis.background_hex,
         p_colours: analysis.colours,
       };
-      const { error: publishError } = await service.rpc("arnaud_publish_photograph", rpcArguments);
+      if (isR2) await verifyAndPromote(service, ticket);
+      const { error: publishError } = isR2
+        ? await service.rpc("arnaud_publish_r2_photograph", { p_reservation_id: ticket.photographId, p_metadata: rpcArguments })
+        : await service.rpc("arnaud_publish_photograph", rpcArguments);
       if (publishError) throw publishError;
+      if (isR2) {
+        try { await r2Storage().removeStaging(path); }
+        catch { console.error("Published Arnaud upload retained a private staging recovery object."); }
+      }
       return responseForPublished(ticket.filename);
     } catch (error) {
+      // R2 failures are recoverable, including ambiguous RPC responses. Never
+      // delete a promoted original here or compete with another finalizer.
+      if (isR2) throw error;
       // A retry may race a successful publication. Never remove a published object.
       const { data: published, error: recheckError } = await service.from("arnaud_photographs")
         .select("filename,storage_path").eq("id", ticket.photographId).maybeSingle();

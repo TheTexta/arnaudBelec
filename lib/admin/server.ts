@@ -12,6 +12,30 @@ export type AdminContext = {
   serviceRoleKey: string;
 };
 
+export async function readAdminJson(request: Request, maximumBytes = 8192): Promise<Record<string, unknown>> {
+  const reader = request.body?.getReader();
+  if (!reader) throw new AdminRequestError("Supply a JSON request.", 400);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maximumBytes) {
+        await reader.cancel();
+        throw new AdminRequestError("The request is too large.", 413);
+      }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  try {
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
+    return value as Record<string, unknown>;
+  } catch { throw new AdminRequestError("Supply a valid JSON object.", 400); }
+}
+
 export async function authorizeAdmin(request: Request): Promise<AdminContext> {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

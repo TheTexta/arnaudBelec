@@ -8,6 +8,8 @@ import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
 import { analyseImage, imageMetadata } from "../lib/photographs/analyse-image.mjs";
+import { uploadProvider } from "../lib/photographs/storage.mjs";
+import { importId, importR2Photograph } from "../lib/photographs/r2-import.mjs";
 import {
   MAXIMUM_UPLOAD_BYTES,
   PHOTOGRAPH_BUCKET,
@@ -174,7 +176,7 @@ async function prepareImage(fileArgument, defaults, manifest) {
     throw new Error("The image file type does not match its contents.");
   }
 
-  const photographId = randomUUID();
+  const photographId = uploadProvider() === "r2" ? importId(filename, buffer) : randomUUID();
   const storagePath = `uploads/${photographId}.${format.extension}`;
   const analysis = await analyseImage(buffer, photographId);
   const metadata = { ...defaults, ...manifestEntry(manifest, fileArgument, filename) };
@@ -207,6 +209,7 @@ async function prepareImage(fileArgument, defaults, manifest) {
 }
 
 async function uploadAndPublish(supabase, prepared) {
+  if (uploadProvider() === "r2") return importR2Photograph(supabase, prepared);
   const bucket = supabase.storage.from(PHOTOGRAPH_BUCKET);
   const { error: uploadError } = await bucket.upload(prepared.storagePath, prepared.buffer, {
     cacheControl: "31536000",

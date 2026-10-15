@@ -19,6 +19,7 @@ type UploadEntry = {
   error: string | null;
   href: string | null;
   pendingTicket: string | null;
+  pendingProvider: "supabase" | "r2" | null;
 };
 
 type Access = "checking" | "signed-out" | "authorised" | "denied" | "unconfigured";
@@ -78,6 +79,7 @@ export default function AdminPanel() {
   const [entries, setEntries] = useState<UploadEntry[]>([]);
   const previewsRef = useRef<string[]>([]);
   const activeUploadRef = useRef<Upload | null>(null);
+  const activeR2Ref = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!supabase) return;
@@ -125,6 +127,7 @@ export default function AdminPanel() {
 
   useEffect(() => () => {
     void activeUploadRef.current?.abort();
+    activeR2Ref.current?.abort();
     previewsRef.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
@@ -204,7 +207,7 @@ export default function AdminPanel() {
       previewsRef.current.push(previewUrl);
       additions.push({
         id: crypto.randomUUID(), file, previewUrl, title: "", altText: "", capturedAt: "", sortOrder: "",
-        status: "ready", progress: 0, error: null, href: null, pendingTicket: null,
+        status: "ready", progress: 0, error: null, href: null, pendingTicket: null, pendingProvider: null,
       });
     }
     setEntries((current) => [...current, ...additions]);
@@ -221,42 +224,74 @@ export default function AdminPanel() {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase is not configured.");
     updateEntry(entry.id, { status: "analysing", progress: 0, error: null });
     const { sample, width, height } = await imageSample(entry.file);
+    const { data: { session } } = await supabase!.auth.getSession();
+    if (!session) throw new Error("Your session has expired. Sign in again.");
+    const recoveryKey = `arnaud-r2-v1:${session.user.id}:${entry.file.name}:${entry.file.size}:${entry.file.lastModified}`;
+    let savedTicket: string | null = null;
+    try { savedTicket = sessionStorage.getItem(recoveryKey); } catch { /* Storage may be unavailable. */ }
+    const clearRecovery = () => { try { sessionStorage.removeItem(recoveryKey); } catch { /* Optional browser recovery. */ } };
     let ticket = entry.pendingTicket;
+    let r2Ticket = entry.pendingTicket ? (entry.pendingProvider === "r2" ? entry.pendingTicket : null) : savedTicket;
+    if (!ticket && r2Ticket) ticket = r2Ticket;
+    if (r2Ticket) updateEntry(entry.id, { pendingTicket: r2Ticket, pendingProvider: "r2" });
     if (!ticket) {
       const prepared = await adminRequest("/api/admin/uploads/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: entry.file.name, size: entry.file.size }),
       });
-      if (typeof prepared.path !== "string" || typeof prepared.token !== "string" || typeof prepared.ticket !== "string") {
+      if (typeof prepared.path !== "string" || typeof prepared.ticket !== "string" || (prepared.provider !== "r2" && typeof prepared.token !== "string")) {
         throw new Error("The upload request returned incomplete data.");
       }
 
       const extension = entry.file.name.split(".").pop()?.toLowerCase() ?? "";
       updateEntry(entry.id, { status: "uploading" });
-      await new Promise<void>((resolve, reject) => {
-        const upload = new Upload(entry.file, {
-          endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
-          headers: { apikey: SUPABASE_ANON_KEY, "x-signature": prepared.token as string },
-          metadata: {
-            bucketName: "arnaudbelec",
-            objectName: prepared.path as string,
-            contentType: MIME_BY_EXTENSION[extension],
-            cacheControl: "31536000",
-          },
-          chunkSize: 6 * 1024 * 1024,
-          retryDelays: [0, 3000, 5000, 10000, 20000],
-          uploadDataDuringCreation: true,
-          storeFingerprintForResuming: false,
-          onProgress: (sent, total) => updateEntry(entry.id, { progress: Math.round(sent / total * 100) }),
-          onError: (error) => { activeUploadRef.current = null; reject(error); },
-          onSuccess: () => { activeUploadRef.current = null; resolve(); },
+      if (prepared.provider === "r2") {
+        r2Ticket = prepared.ticket;
+        ticket = prepared.ticket;
+        updateEntry(entry.id, { pendingTicket: ticket, pendingProvider: "r2" });
+        try { sessionStorage.setItem(recoveryKey, ticket); } catch { /* The server journal still retains the reservation. */ }
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          const upload = new Upload(entry.file, {
+            endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+            headers: { apikey: SUPABASE_ANON_KEY, "x-signature": prepared.token as string },
+            metadata: {
+              bucketName: "arnaudbelec",
+              objectName: prepared.path as string,
+              contentType: MIME_BY_EXTENSION[extension],
+              cacheControl: "31536000",
+            },
+            chunkSize: 6 * 1024 * 1024,
+            retryDelays: [0, 3000, 5000, 10000, 20000],
+            uploadDataDuringCreation: true,
+            storeFingerprintForResuming: false,
+            onProgress: (sent, total) => updateEntry(entry.id, { progress: Math.round(sent / total * 100) }),
+            onError: (error) => { activeUploadRef.current = null; reject(error); },
+            onSuccess: () => { activeUploadRef.current = null; resolve(); },
+          });
+          activeUploadRef.current = upload;
+          upload.start();
         });
-        activeUploadRef.current = upload;
-        upload.start();
-      });
-      ticket = prepared.ticket;
-      updateEntry(entry.id, { pendingTicket: ticket });
+        ticket = prepared.ticket;
+        updateEntry(entry.id, { pendingTicket: ticket, pendingProvider: "supabase" });
+      }
+    }
+
+    if (r2Ticket) {
+      updateEntry(entry.id, { status: "uploading" });
+      const controller = new AbortController();
+      activeR2Ref.current = controller;
+      try {
+        const { uploadR2File } = await import("@/lib/admin/r2-browser");
+        await uploadR2File(entry.file, r2Ticket, adminRequest, progress => updateEntry(entry.id, { progress }), controller.signal);
+      } catch (error) {
+        if (error instanceof AdminApiError && error.code === "ticket_invalid") {
+          clearRecovery();
+          updateEntry(entry.id, { pendingTicket: null, pendingProvider: null });
+        }
+        throw error;
+      } finally { activeR2Ref.current = null; }
     }
 
     updateEntry(entry.id, { status: "publishing", progress: 100 });
@@ -274,12 +309,14 @@ export default function AdminPanel() {
       published = await adminRequest("/api/admin/uploads/publish", { method: "POST", body: form });
     } catch (error) {
       if (error instanceof AdminApiError && ["ticket_invalid", "upload_missing", "upload_removed"].includes(error.code ?? "")) {
-        updateEntry(entry.id, { pendingTicket: null });
+        updateEntry(entry.id, { pendingTicket: null, pendingProvider: null });
+        clearRecovery();
       }
       throw error;
     }
     if (typeof published.href !== "string") throw new Error("The photograph was published, but no link was returned.");
-    updateEntry(entry.id, { status: "published", href: published.href, error: null, pendingTicket: null });
+    updateEntry(entry.id, { status: "published", href: published.href, error: null, pendingTicket: null, pendingProvider: null });
+    clearRecovery();
   }
 
   async function uploadAll() {

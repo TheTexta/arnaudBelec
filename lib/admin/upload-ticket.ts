@@ -7,6 +7,7 @@ export type UploadTicket = {
   size: number;
   userId: string;
   expiresAt: number;
+  provider?: "supabase" | "r2";
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,7 +44,8 @@ export function verifyUploadTicket(value: unknown, serviceRoleKey: string, userI
   }
   if (!ticket || typeof ticket !== "object" || !UUID.test(ticket.photographId)
     || !UUID.test(ticket.userId) || ticket.userId !== userId
-    || !Number.isInteger(ticket.expiresAt) || ticket.expiresAt < Date.now()) {
+    || !Number.isInteger(ticket.expiresAt) || ticket.expiresAt < Date.now()
+    || (ticket.provider !== undefined && !["supabase", "r2"].includes(ticket.provider))) {
     throw new Error("The upload ticket is invalid or expired.");
   }
   validateFilename(ticket.filename);

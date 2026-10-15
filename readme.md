@@ -17,6 +17,22 @@ Rendering is capped at a pixel ratio of `1.5` and 2.5 million drawing-buffer pix
 
 ## Photograph storage
 
+### R2 delivery and staged uploads
+
+All eight production photographs now use checksum-verified R2 originals;
+Supabase originals are retained for rollback. The application supports
+per-photograph Supabase/R2 delivery and opt-in R2 admin/CLI uploads.
+**New uploads still default to Supabase; admin setup and authenticated R2
+publication testing are deferred.** R2 uses published `arnaudbelec` and private
+`arnaudbelec-staging`, with shared Worker delivery under `/arnaudbelec/`.
+Supabase still owns Auth, catalogue metadata and palettes. See
+[`docs/r2-storage.md`](docs/r2-storage.md) for required SQL/configuration,
+provisioning/CORS, checksum-verified migration commands, resumable upload
+recovery, rollout gates and rollback limitations. Run `npm run test:storage`
+for local storage and isolated Postgres migration/security checks.
+
+### Legacy Supabase workflow (new-upload default)
+
 The Coolify-managed Supabase instance at `https://api.dextery.dev` has a separate public Storage bucket named `arnaudbelec`. It accepts JPEG, PNG, and WebP images up to 500 MiB. The tables `public.arnaud_photographs`, `public.arnaud_photo_palette_analyses`, and `public.arnaud_photo_palette_colours` store Arnaud's image metadata and seven-colour analysis separately from Elliot's catalogue. The initial schema is in `supabase/migrations/20260923062000_create_arnaud_photographs.sql`; `supabase/migrations/20260923150000_expand_arnaud_palette_to_seven.sql` expands the rank constraint, requires seven colours for new imports, and adds an atomic palette replacement RPC. `supabase/migrations/20260923211500_use_oklab_kmedoids.sql` requires the OKLab k-medoids extractor. `supabase/migrations/20260923220600_add_edge_background_colour.sql` adds `arnaud_photographs.background_hex` and requires the background colour in both write RPCs. `supabase/migrations/20260928220000_exclude_background_from_arnaud_palette.sql` accepts the background-aware palette algorithm in both write RPCs. Apply these migrations in order on new instances.
 
 Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the ignored `.env.local` file to show imported images on the site. Get the keys from Supabase Studio at `https://studio.dextery.dev`. The local setup and import scripts also load `.env.local`; they need `SUPABASE_SERVICE_ROLE_KEY` and use `SUPABASE_URL` or fall back to `NEXT_PUBLIC_SUPABASE_URL`. Keep the service-role key in `.env.local` or your local shell; never expose it through a `NEXT_PUBLIC_` variable or commit it.

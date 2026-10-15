@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { adminErrorResponse, AdminRequestError, authorizeAdmin } from "@/lib/admin/server";
+import { adminErrorResponse, AdminRequestError, authorizeAdmin, readAdminJson } from "@/lib/admin/server";
 import { createUploadTicket, storagePathFor } from "@/lib/admin/upload-ticket";
 import { validateFileSize, validateFilename } from "@/lib/admin/validation";
 import { PHOTOGRAPH_BUCKET } from "@/lib/photographs/config.mjs";
+import { uploadProvider } from "@/lib/photographs/storage.mjs";
+import { prepareR2 } from "@/lib/admin/r2-upload";
+import type { UploadTicket } from "@/lib/admin/upload-ticket";
 
 export const runtime = "nodejs";
 
@@ -12,12 +15,7 @@ export async function POST(request: Request) {
     const contentLength = Number(request.headers.get("content-length") ?? 0);
     if (contentLength > 4096) throw new AdminRequestError("The upload request is too large.", 413);
 
-    let input: { filename?: unknown; size?: unknown };
-    try {
-      input = await request.json();
-    } catch {
-      throw new AdminRequestError("Supply a valid upload request.", 400);
-    }
+    const input = await readAdminJson(request, 4096);
     let filename: string;
     let size: number;
     try {
@@ -32,13 +30,18 @@ export async function POST(request: Request) {
     if (lookupError) throw lookupError;
     if (duplicate) throw new AdminRequestError("A photograph with this filename is already published.", 409);
 
-    const ticket = {
+    const ticket: UploadTicket = {
       photographId: randomUUID(),
       filename,
       size,
       userId: user.id,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      provider: uploadProvider(),
     };
+    if (ticket.provider === "r2") {
+      const prepared = await prepareR2(service, ticket);
+      return Response.json({ ...prepared, provider: "r2", ticket: createUploadTicket(ticket, serviceRoleKey) }, { headers: { "Cache-Control": "no-store" } });
+    }
     const path = storagePathFor(ticket);
     const { data, error } = await service.storage.from(PHOTOGRAPH_BUCKET).createSignedUploadUrl(path);
     if (error || !data) throw error ?? new Error("No signed upload token was returned.");
