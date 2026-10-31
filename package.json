@@ -19,6 +19,7 @@
     "test:admin": "tsx --test lib/admin/*.test.ts",
     "test:blog": "tsx --test lib/blog/*.test.ts",
     "test:cms": "NODE_ENV=test tsx --test lib/cms/*.test.ts",
+    "test:cms:disabled": "node scripts/cms/verify-disabled-build.mjs",
     "cms": "payload",
     "cms:db": "tsx scripts/cms/local-database.ts",
     "cms:import": "DISABLE_PAYLOAD_HMR=true tsx scripts/cms/import.ts",

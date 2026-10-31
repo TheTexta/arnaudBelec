@@ -109,6 +109,11 @@ npm run cms -- generate:importmap
 
 Automatic type generation is disabled; schema pushing and automatic database
 creation are always disabled. Migrations are explicit, never build/start hooks.
+After a disabled production build, run `npm run test:cms:disabled`. It starts a
+loopback-only server with an intentionally unreachable local database address,
+checks legacy admin and disabled CMS routes (including metadata/version routes),
+and rejects any database initialization in server output. Both the page and its
+metadata generation are gated before invoking Payload, not just the root layout.
 
 ## Import and verification
 
