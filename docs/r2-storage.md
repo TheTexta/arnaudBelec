@@ -5,13 +5,39 @@
 The owner approved the Arnaud rollout, including production changes, on
 2026-10-15 (UTC). Application/SQL/Worker deployment and the eight-photo catalogue
 cutover are complete. Admin configuration and authenticated R2 app uploads were
-explicitly deferred by the owner. See the checkpoint below before resuming.
+initially deferred. Admin access is now configured; journal upload activation is
+recorded below and in `docs/blog-implementation.md`.
 No Supabase media deletion is included. Supabase retains Postgres/Auth; Vercel
 retains the app. Authorization remains the existing Arnaud server UUID allowlist.
 
 Application, site SQL, CORS and migration tooling belong in this repository.
 The shared `dextery-assets` Worker belongs in `../dextery-infrastructure`.
 Never publish from historical bur1alrites Worker configuration.
+
+### Journal upload activation — 2026-10-31
+
+The owner approved enabling journal media uploads, leaving new photograph uploads
+on Supabase. Staging CORS now permits PUT, GET and HEAD from the exact production
+origin, preserving Content-Type, exposed ETag and the 3600-second lifetime. The
+updated policy is applied/read back and recorded in `deploy/r2/staging-cors.json`.
+Both R2 buckets still have r2.dev disabled and no custom domains. This does not
+alter shared Worker routes, bindings, published originals or any other project.
+
+The owner chose to replace the temporarily shared R2 keys directly in Arnaud's
+Vercel Production environment with an Object Read & Write credential for exactly
+`arnaudbelec` and `arnaudbelec-staging`. The owner has confirmed these values are
+saved and bucket-scoped; scope is owner-reported. The journal upload flag is live
+in deployment `dpl_7PC4yiArE1uY1Tn1RbS41i11xXfj`. Real private PNG/MP4/WAV uploads,
+autosave/preview, SHA-256 read-back, range requests and anonymous denial passed
+through the owner's personally signed-in browser on 2026-10-31. See the journal
+runbook for the receipt and deployment source fingerprint.
+`ARNAUD_UPLOAD_STORAGE` remains `supabase`; the journal flag is independent.
+Existing Supabase copies and all recovery/staging objects are retained. The owner
+approved only a clearly labeled private test draft, not publication or deletion.
+That draft and three staging originals (35,044 bytes total) are retained. Nothing
+was published or deleted. This does not prove the journal's published-bucket write
+path, public publish/unpublish flow, or worst-case timing. Photograph R2 uploads
+and their separate 500 MiB acceptance gate remain deferred.
 
 ### Rollout checkpoint — 2026-10-15 UTC
 
@@ -71,9 +97,11 @@ Never publish from historical bur1alrites Worker configuration.
   future Git deployments must retain this implementation. Local credentials,
   backups and manifests are excluded from Git. No Supabase deletion was performed.
 
-Remaining rollout: configure the intended admin UUIDs, replace the temporary
-broad R2 credential, complete authenticated upload/recovery/runtime acceptance,
-then enable R2 uploads. Retain Supabase originals and the deployed provider SQL.
+Remaining photograph rollout: complete authenticated photo-upload/recovery/runtime
+acceptance before enabling R2 photo uploads. Admin access is now configured and
+the owner reports replacing the shared credential, as recorded above. Retain
+Supabase originals and the deployed provider SQL. Journal uploads are independently
+enabled and privately accepted; this does not close the photograph rollout gate.
 
 ## Storage contract
 

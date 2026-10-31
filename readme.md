@@ -3,7 +3,7 @@
 
 ## Development
 
-Run `npm install` and `npm run dev`, then open the local URL shown in the terminal. The photo page is currently the home page. Until photographs are imported, its gallery uses `public/test-image.jpg` as a temporary image; the selectable colour gradients filter the matching analysed placeholder tiles.
+Use Node **24.22.1** (`.nvmrc`; Payload also supports `^22.23.4`), then run `npm install` and `npm run dev`. Open the local URL shown in the terminal. The photo page is currently the home page. Until photographs are imported, its gallery uses `public/test-image.jpg` as a temporary image; the selectable colour gradients filter the matching analysed placeholder tiles.
 
 The page uses Tailwind CSS v4 utilities and Motion to drift the central photo's seven extracted palette colours around the photo. Each gradient starts outside the photo on page load, with random candidates chosen across the free area and spaced from gradients already placed; its size still depends only on its palette weight. The entire archive page, including the gallery, uses a subdued background extracted from the central photo's dominant edge colour. Each detail page uses its own photo's background colour throughout. Text and focus indicators adjust for light or dark backgrounds. The central photo and detail-page photo keep their original aspect ratios within a 66.667vw-wide frame (viewport width minus 32px on small screens) and an 80vh height limit. Their measured size drives the moving gradients' collision bounds as the viewport or photo changes. Each gradient's diameter is set by its palette weight: an even one-seventh share is 100vw, with smaller shares shrinking toward 75vw and larger shares growing toward 125vw. The archive and detail pages render their palette gradients and animated monochrome grain in one Three.js/WebGL canvas below the opaque photographs and HTML controls, keeping photographs sharp. The colour wash can spill into the gallery below the hero section, while the gradient centers remain constrained to the hero section and avoid the photo. Selecting a colour ranks the gallery below by similarity to that swatch: it shows every photo within the colour-distance threshold, or fills with the closest eligible photos to reach five when available. It does not change the central displayed photo. Clicking the central photo or a gallery thumbnail opens its `/photos/<filename>` page. Each detail page shows that photograph with its own seven moving palette gradients and photographs ranked by colour similarity; selecting a gradient uses the same five-result minimum, and clicking the full photograph restores all seven colours. The photographer name links back to the archive at `/`. `app/globals.css` holds the fallback glow utility.
 
@@ -41,9 +41,37 @@ The site reads the published photograph catalogue first, including each photogra
 
 The bucket is already provisioned on the current server, and `npm run storage:setup` verifies its settings or creates it on a new instance. Analyze an image locally before upload with `npm run photos:import -- --dry-run path/to/photo.jpg`, then publish with `npm run photos:import -- path/to/photo.jpg`. Multiple file paths are supported.
 
-### Photo admin
+### Shared admin
 
 The upload panel is at `/admin`. Create a Supabase Auth user in Studio, then put that user's UUID in the server-only `SUPABASE_ADMIN_USER_IDS` environment variable. Separate multiple UUIDs with commas. The panel has no public sign-up flow, and every admin API request verifies its Supabase access token with Auth and checks this allowlist. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY` in the deployed environment as well as `.env.local` for local development. `.env.example` lists the required variables. The service-role key must never use a `NEXT_PUBLIC_` prefix.
+
+All `/admin` routes share one login, session verification and persistent navigation
+shell in `app/(website)/admin/layout.tsx`. **Photographs** at `/admin` handles photo uploads
+and their metadata; **Journal** at `/admin/posts` handles posts and revisions.
+Switching subsections does not require signing in again. Sign-out applies to the
+whole admin. Leaving unsaved writing or a queued photo upload through the shared
+navigation asks for confirmation. Every server request still checks authorization;
+the client shell is not a security boundary.
+
+Confirmed departure stops further preparation, transfer and publication in the
+remaining photo batch, including work waiting on a preparation response. Recovery
+tickets/objects are retained. A publication request already accepted by the server
+may still complete; leaving the page does not roll back committed photographs.
+
+With explicit owner approval, the requested confirmed Supabase Auth account was
+added to Arnaud's production UUID allowlist on 2026-10-30 and activated in the
+shared-admin deployment. No shared Auth metadata or other site's permissions were
+changed. That admin release did not change R2 upload settings. Sign in at
+`https://arnaud-belec.vercel.app/admin` with the existing Supabase email/password.
+
+### Non-photograph styling
+
+The journal, private preview and shared admin take their black/tan direction from
+Arnaud's old [Adobe Portfolio](https://arnaudnaudbel.myportfolio.com/). Its primary
+faces are Futura PT and Proxima Nova; the approved open-source alternatives are
+**Jost** and **Nunito Sans**, self-hosted with `next/font` only on these routes.
+No Adobe font binaries or old-site background images are copied. Fonts/CSS are
+scoped to non-photograph shells; photo pages retain their original styling.
 
 Sign in with that Auth user's email and password, choose JPG, PNG, or WebP photographs, add optional title, alt text, capture date, and sort order, then select **Upload and publish**. Uploads go directly from the browser to the existing `arnaudbelec` bucket in resumable 6 MiB chunks using a short-lived signed upload token. The original files do not pass through Vercel. The browser sends a 96-pixel sample to the server for the existing seven-colour palette and background-colour analysis; the server checks the finished object and publishes its metadata through `arnaud_publish_photograph`. The admin path uses a supplied capture date or a `YYYYMMDD-` filename prefix; it does not read EXIF dates. Filenames must be unique in the published catalogue. If the connection fails after transfer, **Retry remaining uploads** reuses the completed upload while its ticket is valid. The server removes the uploaded object when it rejects publication; closing the browser before publishing can leave an unpublished object for an administrator to remove. Successful photographs appear on the live photo pages without a rebuild. The public catalogue, bucket, and CLI importer remain compatible; no database migration is needed for this panel. Run `npm run test:admin` for upload-ticket and input-validation checks.
 
@@ -63,6 +91,77 @@ To set a different title, alt text, capture date, or sort order per image, pass 
 ```
 
 The importer reads orientation and capture date from EXIF, samples an orientation-corrected image at up to 96 × 96 pixels, and runs seven-colour OKLab k-medoids analysis for up to 10 iterations. Pixel chroma raises saturated colours' importance during clustering, and each swatch is a colour observed in the image. The background colour uses the largest cluster from the outer 8% of the same sample, with reduced chroma and unchanged OKLab lightness. Palette extraction excludes pixels within an OKLab distance of 0.08 from that background colour, then calculates each swatch's weight as its share of the remaining pixels; this controls gradient size. If no pixels remain, a uniform image keeps its original pixels. Transparent pixels are ignored; if the entire edge is transparent, the extractor uses the opaque interior. For each palette colour it stores rank, RGB, hex, CIE Lab for gallery matching, and weight. It uploads the object first, publishes all database rows in one transaction, and removes the object if publishing fails. Run `npm run test:palette` to check the extractors. Eight unique photographs are currently published with OKLab palettes; an identical duplicate root upload was removed.
+
+## Journal / BlockNote admin
+
+### Native Payload administration (activation pending)
+
+Payload 3.92.1 is implemented at `/cms`, with the existing BlockNote JSON editor,
+native drafts/autosave/versions, a protected Photographs view, private preview,
+and immutable imported legacy revision recovery. Supabase remains the only login
+and the existing server UUID allowlist is checked on every request.
+
+`ARNAUD_CMS_ENABLED` defaults off. When enabled, `/admin` redirects to `/cms` and
+legacy journal-write APIs refuse writes; disabling it restores the previous
+admin. The photograph frontend, storage provider, public journal loaders and
+media gateway are unchanged. Route groups give Payload its own root layout;
+existing page routes now live under `app/(website)/` without URL changes.
+
+Payload uses `arnaud_cms` in the **same Postgres database** as the legacy journal.
+Each native save/publish/restore updates both stores in one database transaction.
+Automatic schema pushing, database creation and destructive down migrations are
+disabled. Do not point it at a separate database or run migrations during builds.
+
+See [`docs/payload-cutover.md`](docs/payload-cutover.md) for isolated local setup,
+environment variables, import/report commands, exact proposed production changes,
+approval gates and non-destructive rollback. Run `npm run test:cms` in addition to
+the existing tests. **Source-code deployment is approved with Payload disabled;
+production CMS database/network changes and activation remain separately gated.**
+
+The public journal is at `/blog`, with posts at `/blog/<slug>`. The private
+writing subsection is `/admin/posts`, inside the shared admin. It uses
+the same login, Supabase Auth account and server-only admin allowlist; there is no new
+sign-up flow. BlockNote loads only inside the authenticated writing view, not on
+public posts.
+
+Posts support autosaved private drafts, private preview, saved-version recovery,
+explicit publishing/unpublishing, and direct multipart image/video/audio uploads.
+Published documents are separate snapshots: editing a live post does not expose
+its new draft. Uploaded media stays in private R2 staging until verification and
+publication. Blog media uses site-level access-checked redirects, not new shared
+Worker routes or the existing photograph catalogue.
+
+**Database and application deployed:** with owner approval, the blog migration
+was applied to `api.dextery.dev` on 2026-10-30. Its source is
+`supabase/migrations/20261030231725_create_arnaud_blog.sql`, aligned with the live
+migration ledger. RLS/grants were verified, no blog content was created, and the
+existing eight-photo catalogue was unchanged. On 2026-10-31, separately approved
+journal uploads were enabled and deployed with
+`ARNAUD_BLOG_UPLOADS_ENABLED=true`, owner-confirmed Arnaud-only R2 credentials,
+and exact-origin staging CORS for PUT/GET/HEAD. The flag still defaults off for new
+installations and is independent of `ARNAUD_UPLOAD_STORAGE`, which stays Supabase.
+Real signed-in image/video/audio uploads, autosave, private preview/playback,
+checksum/range reads and anonymous denial passed. The private acceptance draft
+and staging originals are retained; nothing was published or deleted. Public
+media promotion/publish/unpublish and worst-case-size acceptance were not exercised.
+
+In the editor, type **`/image`**, **`/video`**, or **`/audio`**, select the block and
+choose a file. Supported formats are JPG, PNG, WebP, MP4, WebM, MP3, Ogg and WAV,
+up to **100 MiB per file**. Keep the tab open during upload; reselect the same file
+in the same post/tab to resume after a failed transfer.
+
+Next.js, `@next/env`, and `eslint-config-next` are pinned to **16.4.3** for the
+approved Next.js security fix. The remaining advisories were fixed with sharp
+**0.35.5**, source-map-js **1.2.2**, and zod **4.6.7**. These patched versions remain
+live. At that upload-release checkpoint, `npm audit --omit=dev` reported zero
+production findings and the full audit reported 16 moderate development-tooling
+findings rooted in minimatch. The later Payload dependency assessment is recorded
+separately in `docs/payload-cutover.md`. No unrelated dependency upgrade was
+bundled with upload enablement. See the journal runbook for release checkpoints.
+
+See [`docs/blog-implementation.md`](docs/blog-implementation.md) for setup,
+security, media/recovery behavior, and rollout checks. Run `npm run test:blog` for
+document, route, storage, upload-resume, and isolated Postgres security checks.
 
 ## Project notes
 

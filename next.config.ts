@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withPayload } from "@payloadcms/next/withPayload";
 
 const remotePatterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [];
 remotePatterns.push({ protocol: "https", hostname: "media.dextery.dev", pathname: "/arnaudbelec/uploads/**", search: "" });
@@ -24,4 +25,4 @@ const nextConfig: NextConfig = {
   images: { remotePatterns },
 };
 
-export default nextConfig;
+export default withPayload(nextConfig);

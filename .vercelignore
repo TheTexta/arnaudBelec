@@ -1,0 +1,12 @@
+# Source deployments must never upload local credentials or verification state.
+.git
+.vercel
+.local
+.impeccable
+.next
+node_modules
+.env*
+**/.env*
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store

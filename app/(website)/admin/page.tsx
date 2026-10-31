@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import AdminPanel from "./admin-panel";
+import AdminPanel from "@/app/admin/admin-panel";
 
 export const metadata: Metadata = {
   title: "Photo admin — Arnaud Belec",

@@ -364,6 +364,9 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
           </p>
         )}
       </section>
+      <footer className="relative z-3 px-6 py-8 text-center text-sm">
+        <Link href="/blog" className="underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4">Journal</Link>
+      </footer>
     </main>
   );
 }

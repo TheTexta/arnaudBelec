@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { loadPublicPhotographs } from "@/lib/supabase-public";
-import PhotoDetail from "./photo-detail";
+import PhotoDetail from "@/app/photos/[filename]/photo-detail";
 
 type PhotoPageProps = {
   params: Promise<{ filename: string }>;

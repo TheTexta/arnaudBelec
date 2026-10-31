@@ -1,4 +1,4 @@
-import PhotoPage from "./photo-page";
+import PhotoPage from "@/app/photo-page";
 import { loadPublicPhotographs } from "@/lib/supabase-public";
 
 // Keep the catalogue current when photographs are added outside a site deploy.

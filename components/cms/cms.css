@@ -1,0 +1,40 @@
+@import "../../app/blog/blog.css";
+
+:root {
+  --font-body: var(--font-non-photo-text), "Nunito Sans", sans-serif;
+  --font-serif: var(--font-non-photo-display), Jost, sans-serif;
+}
+html[data-theme="dark"] {
+  --theme-bg: #090807;
+  --theme-text: #eadfce;
+  --theme-elevation-0: #090807;
+  --theme-elevation-50: #141210;
+  --theme-elevation-100: #211b15;
+  --theme-elevation-150: #33291e;
+  --theme-elevation-200: #7d6a52;
+  --theme-elevation-500: #b5a895;
+  --theme-elevation-800: #eadfce;
+  --theme-elevation-1000: #eadfce;
+}
+.cms-session { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #090807; color: #eadfce; }
+.cms-session form { width: min(100%, 440px); }
+.cms-session h1 { color: #c69b69; font-family: var(--font-non-photo-display), Jost, sans-serif; font-weight: 400; }
+.cms-session label { display: grid; gap: 8px; margin-block: 24px; }
+.cms-session input, .cms-session button { min-height: 44px; padding: 12px; border: 1px solid #7d6a52; border-radius: 2px; font: inherit; }
+.cms-session input { background: #141210; color: #eadfce; }
+.cms-session button { background: #c69b69; color: #090807; cursor: pointer; }
+.cms-session button:disabled { opacity: .5; cursor: wait; }
+.cms-session button:hover { background: #eadfce; }
+.cms-session a { display: block; margin-block-start: 24px; color: #c69b69; }
+.cms-session :focus-visible, .cms-blocknote :focus-visible { outline: 2px solid #c69b69; outline-offset: 4px; }
+.cms-session ::selection { background: #c69b69; color: #090807; }
+.cms-extra-nav { display: grid; gap: 16px; padding-block: 24px; }
+.template-default h1 { color: #c69b69; font-family: var(--font-non-photo-display), Jost, sans-serif; font-weight: 400; }
+.cms-blocknote { min-height: 0; padding: 0; background: transparent; }
+.cms-blocknote .blog-editor-surface { min-height: 320px; padding: 24px 32px; border: 1px solid #7d6a52; background: #141210; color: #eadfce; }
+.cms-photographs { min-height: auto; }
+.cms-preview { min-height: auto; }
+.cms-recovery { min-height: 0; padding: 20px; border: 1px solid #7d6a52; background: #141210; color: #eadfce; margin-block-end: 24px; }
+.cms-recovery p { max-width: 68ch; margin-block: 0 16px; }
+.field-diff-content pre { max-width: 100%; overflow-x: auto; }
+@media (max-width: 600px) { .cms-blocknote .blog-editor-surface { padding: 20px 12px; } }
