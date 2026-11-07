@@ -1,7 +1,10 @@
 # Homepage: fluid scene and Payload settings
 
 **Full-rollout follow-up:** the owner has now explicitly approved the complete
-checkout deployment and both additive migrations after backup/rehearsal. See
+checkout deployment and both additive migrations after backup/rehearsal. They are
+now applied and the full site is deployed as `dpl_56SgFgNQeU6qGcru4J9N37QjEVFv`.
+Homepage slots remain text-only defaults until an explicit Site settings publication.
+See
 [`full-site-rollout-20261107.md`](full-site-rollout-20261107.md) for the approval,
 verification and actual production outcome. The local-only boundary below records
 the original implementation stage, not a revocation of that later approval.

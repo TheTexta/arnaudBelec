@@ -266,7 +266,7 @@ export function draftMappings(manifest) {
     let sourceTexts = manifest.pages.filter(page => sourcePaths.includes(page.path)).flatMap(page => page.texts.map(block => block.text));
     if (["phassion", "circle-of-fashion"].includes(key)) sourceTexts = sourceTexts.filter(value => value.startsWith(key === "phassion" ? "PHASSION," : "Circle of Fashion,"));
     const uniqueText = [...new Set(sourceTexts)].filter(Boolean);
-    templates.push({ key, collection: group.kind, operation: group.existingSelection ? "look-up-existing-draft-do-not-overwrite" : "propose-new-private-draft-after-CMS-dedupe",
+    templates.push({ key, collection: group.kind, operation: group.existingSelection ? "look-up-existing-project-do-not-modify" : "propose-new-private-draft-after-CMS-dedupe",
       publicPath: `${group.kind === "posts" ? "/blog" : group.kind === "videos" ? "/video" : "/fashion"}/${key}`,
       data: { title: group.title, slug: key, ...(group.year ? { year: group.year } : {}), _status: "draft" }, sourceText: uniqueText,
       mediaBindings: { orderedImages: members, ...(key === "xix-visuals-for-december" ? { film: "An-nBB7Dn58" } : {}) },
@@ -307,6 +307,25 @@ export async function prepare(outputPath, existingDirectory, includeAdobe = fals
   await json(join(output, "summary.json"), summary);
   await write(join(output, "UPLOAD-REVIEW.md"), `# Adobe Portfolio intake — LOCAL PREPARATION ONLY\n\n${staged.length} image files and ${summary.stagedVideos} Adobe MP4 renditions staged. Nothing uploaded or published.\n\n- Verify: \`node scripts/portfolio/prepare.mjs verify ${relative(root, output)}\`.\n- Read \`manifest.json\` for hashes, provenance, duplicate decisions and failures.\n- \`cms-drafts.json\` proposes Fashion/Video/Journal drafts; asset IDs are NOT native Media IDs. This is not an executable Payload import.\n- \`photographs-queue.json\` is blocked: the photograph uploader publishes immediately.\n- Refresh the authenticated CMS inventory before upload; reuse existing verified originals and drafts.\n- Upload only reviewed unmatched files through native signing/direct upload/server verification; never inject verified metadata.\n- Preserve exact text/credits from \`sources/\`; add reviewed alt text, cover selection and source order.\n- Artwork/music are proposed Journal posts; theatre material is photography, not an asserted fashion-design credit.\n- Covers, backgrounds and the contact portrait are held for placement review, not automatically assigned to Site settings.\n- YouTube entries need authorized film files. Adobe MP4s are highest-exposed HLS stream copies without re-encoding, not 4K masters.\n- Review all composition-only exclusions and video \`sameEncodedSegmentsAs\` before deduplicating publication.\n- Keep \`sporadic-thread\` blocked. No external social-channel archive was scraped.\n- Publication, migrations, deployment and any changes to existing drafts are separate approvals.\n`);
   manifest.files = await bundleFiles(output);
+  await json(join(output, "manifest.json"), manifest);
+  const bytes = await readFile(join(output, "manifest.json"));
+  await write(join(output, "manifest.sha256"), `${digest(bytes)}  manifest.json\n`);
+  return summary;
+}
+
+export async function prepareVideoSupplement(sourceDirectory, outputPath) {
+  await verifyBundle(sourceDirectory);
+  const sourceBytes = await readFile(join(sourceDirectory, "manifest.json"));
+  const source = JSON.parse(sourceBytes);
+  assert.equal(source.origin, origin);
+  const ids = [...new Set(source.videos.filter(video => video.provider === "adobe").map(video => video.id))];
+  assert.ok(ids.length > 0 && ids.length <= 8, "Unexpected video supplement scope.");
+  const output = await createOutput(outputPath);
+  const clips = await videos([{ youtube: [], adobe: ids }], output, true);
+  const summary = { output, sourceBundle: resolve(sourceDirectory), stagedVideos: clips.filter(clip => clip.status === "staged").length, failedVideos: clips.filter(clip => clip.status === "download-failed").length };
+  await json(join(output, "summary.json"), summary);
+  const manifest = { version: 1, preparedAt: new Date().toISOString(), origin, remoteWrites: false,
+    sourceBundle: { directory: resolve(sourceDirectory), manifestSha256: digest(sourceBytes) }, assets: [], pages: [], videos: clips, files: await bundleFiles(output) };
   await json(join(output, "manifest.json"), manifest);
   const bytes = await readFile(join(output, "manifest.json"));
   await write(join(output, "manifest.sha256"), `${digest(bytes)}  manifest.json\n`);
@@ -355,6 +374,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const args = process.argv.slice(2);
     if (args[0] === "verify" && args.length === 2) console.log(JSON.stringify(await verifyBundle(args[1]), null, 2));
+    else if (args[0] === "videos" && args.length === 3) {
+      const summary = await prepareVideoSupplement(args[1], args[2]);
+      console.log(JSON.stringify(summary, null, 2));
+      if (summary.failedVideos) process.exitCode = 1;
+    }
     else if (args[0] && !args[0].startsWith("-") && args[1] === "--existing" && args[2] && args.slice(3).every(arg => arg === "--adobe-video") && args.length <= 4) {
       const summary = await prepare(args[0], args[2], args.includes("--adobe-video"));
       console.log(JSON.stringify(summary, null, 2));
@@ -364,7 +388,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.log(JSON.stringify(summary, null, 2));
       if (summary.failedImages || summary.failedVideos) process.exitCode = 1;
     } else {
-      console.log('Usage: node scripts/portfolio/prepare.mjs .local/NEW-DIRECTORY --existing "/Volumes/A044/arnaud portfolio" [--adobe-video]\n       node scripts/portfolio/prepare.mjs .local/NEW-DIRECTORY --recorded-exclusions [--adobe-video]\n       node scripts/portfolio/prepare.mjs verify .local/EXISTING-BUNDLE\nRecorded exclusions do not claim fresh original-byte verification. No .env, authentication, CMS writes, uploads, publication or deployment.');
+      console.log('Usage: node scripts/portfolio/prepare.mjs .local/NEW-DIRECTORY --existing "/Volumes/A044/arnaud portfolio" [--adobe-video]\n       node scripts/portfolio/prepare.mjs .local/NEW-DIRECTORY --recorded-exclusions [--adobe-video]\n       node scripts/portfolio/prepare.mjs videos .local/SOURCE-BUNDLE .local/NEW-SUPPLEMENT\n       node scripts/portfolio/prepare.mjs verify .local/EXISTING-BUNDLE\nRecorded exclusions do not claim fresh original-byte verification. No .env, authentication, CMS writes, uploads, publication or deployment.');
       if (args.length && !["--help", "-h"].includes(args[0])) process.exitCode = 1;
     }
   } catch (error) {

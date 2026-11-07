@@ -51,8 +51,75 @@ original Fashion selection remain private drafts.
 - Fresh live rollback/application baseline is the Circle of Fashion release
   `dpl_9ncY5tyxrH4aJ27VkfTFHR9q1pWZ`, not its older video-only predecessor.
 
-No production schema change or full-site promotion is claimed by these rehearsal
-results. Private evidence is retained under ignored `.local/full-rollout-20261107/`.
+The rehearsal itself made no production change. The separately approved real
+application below followed those checks. Private evidence is retained under ignored
+`.local/full-rollout-20261107/`.
+
+## Production migration and deployment
+
+- Code commit: **`dcd240ee9d01cc27d86e1f993b6aeb7dddb1b61a`**, all 245 changed paths.
+  No ignored `.env`, `.local`, `.vercel` or private operational artifacts were
+  committed. The complete 306-file Git archive SHA-256 is
+  `92375599765d644e9c75839f5b30f5fdff9b0fa3a3f5f1d8836cc8fd36fe58f7`.
+- Applied only `20261104_120000_site_expansion` and `20261105_120000_homepage`
+  through the existing migrator→owner identity using Payload's real CLI. The later
+  raw-import ledger entry survived. All 20 existing native content tables remained
+  byte-equivalent; all 13 new tables were empty with correct owners/grants. The
+  raw import journal remains private. Immediate backup SHA-256:
+  `ad254f684c30119378a3f5d4245c31621460de7c1dd001ba7421f57c6b513354`.
+- The old Circle release passed public/anonymous forward reads against the new
+  schema before deployment. No existing content, publication or original changed.
+- Added and read-back verified only production `ARNAUD_NEWSLETTER_ENABLED=false`.
+  No provider, other site variable, domain, shared service or gateway was changed.
+- Deployment **`dpl_56SgFgNQeU6qGcru4J9N37QjEVFv`** is live at
+  <https://arnaud-belec.vercel.app>. All 299 uploaded source SHA-1s matched the
+  committed export. The other seven Git files were excluded by the existing
+  ignore rules (design metadata, `.env.example`, `.gitignore`), not deployed secrets.
+- Stage HTTP and 24 real-content route/viewport checks passed at 390/1440px:
+  actual P22 glyphs, live homepage fluid/reduced-motion rendering, all ten Circle
+  images decoded, sound off by default, native CMS/settings and all three private
+  4K masters decoded at both widths. Captures were inspected. CMS testing blocked
+  non-GET browser requests, so no autosave/publication/editorial mutation occurred.
+- Promotion checked production still pointed to the freshly verified Circle
+  baseline before switching. Canonical HTTP read-back passed: homepage `/`, archive
+  `/photos`, existing photo/Journal links, Circle and CMS work; only 11 currently
+  published Media are anonymous, all 33 are readable to the existing admin; draft
+  projects and all three masters remain denied anonymously. Authorized ranges
+  succeed with unchanged 60-second capabilities. Newsletter requests return 503
+  before database/provider work; no email or subscriber/delivery record was created.
+
+## Completion
+
+- Canonical production browser acceptance also passed all 24 route/viewport cases,
+  including real P22 glyphs, homepage fluid/reduced motion, Circle's ten images,
+  CMS/settings and decoded playback of all three private 4K masters at both widths.
+  No page exceptions or overflow; non-GET browser requests remained blocked.
+- Final read-only comparison matched all 29 pre-existing native/public content
+  tables in this rollout's baseline, including all 33 then-existing Media, all
+  three import journals, prior drafts/history, photographs and palettes. The only
+  native ledger additions are the approved pair. Newsletter tables remained empty,
+  no Site settings were published, and role flags/raw-journal denial were intact.
+- Only the explicitly approved temporary acceptance session was revoked; all 18
+  previous sessions survived. Its token artifact was deleted. The labelled,
+  image-verified, network-none/no-ports restore container was removed and only the
+  owned maintenance tunnel stopped. No production service, volume, original or
+  shared infrastructure was removed or reconfigured.
+- No runtime error/fatal entries were found for the deployed release during the
+  scoped post-release log check. Safari/physical iOS remain untested.
+- Concurrent Adobe-intake changes arrived after the original commit/deployment;
+  the owner explicitly requested including those scripts in an additional reviewed
+  commit. Their private import/publication record is separate in
+  `adobe-portfolio-intake.md`, not an effect of this application rollout. In
+  particular, the 33-Media preservation result above is this rollout's timestamped
+  baseline, not a claim that subsequent authorized imports cannot add records.
+- The additional operator/documentation snapshot passed lint, TypeScript and all
+  30 parser/preparation/replay tests, plus an independent read-only safety review.
+  It changes no application runtime files and was not executed as part of release
+  verification. Committing it does not authorize additional Auth/import/publication
+  operations or claim a second application deployment.
+
+Local commits are not pushed to the remote by this task. Production source and
+acceptance receipts remain under ignored `.local/full-rollout-20261107/`.
 
 ## Recovery boundary
 

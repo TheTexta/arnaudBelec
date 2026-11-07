@@ -4,7 +4,9 @@
 local changes, confirmed P22 web-use licensing and approved both pending Arnaud-only
 migrations after backup/rehearsal. See
 [`full-site-rollout-20261107.md`](full-site-rollout-20261107.md) for production
-status; newsletter sending and new editorial publication remain separate gates.
+status. Both pending migrations are now applied and full deployment
+`dpl_56SgFgNQeU6qGcru4J9N37QjEVFv` is live; newsletter sending and new editorial
+publication remain separate gates. Existing Circle publication is preserved.
 The earlier scoped/local-only records below are historical.
 
 **2026-11-06 production exception:** an independently approved category-only

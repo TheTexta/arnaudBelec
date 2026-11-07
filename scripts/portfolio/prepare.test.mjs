@@ -30,6 +30,13 @@ test("supports non-lazy images and advertised crop output widths", () => {
   assert.equal(bestRendition([`${cdn}${id}_rw_1920.JPG?h=test`, full]), full);
 });
 
+test("inert Adobe lightbox/script/noscript/template images are not gallery occurrences", () => {
+  const html = page(`<script type="text/html" class="js-lightbox-slide-content">${image()}</script>${image()}<noscript>${image()}</noscript><template>${image()}</template>${image()}`);
+  const parsed = parsePage(html, "/fotos");
+  assert.equal(parsed.images.length, 2, "Two actual visible placements remain; inert renditions do not multiply them.");
+  assert.ok(parsed.images[0].offset > html.match(/<body>/).index);
+});
+
 test("retains lightbox URLs as evidence without claiming camera-original quality", () => {
   const parsed = parsePage(page(`<div class="js-lightbox" data-src="${cdn}${id}.jpg?h=public">${image()}</div>`), "/films");
   assert.equal(parsed.images[0].lightboxUrl, `${cdn}${id}.jpg?h=public`);
@@ -76,6 +83,7 @@ test("fashion sections remain separate, and theatre photography is not assigned 
 
 test("HLS resolves only scoped Adobe rendition paths and inherits the public player's query", () => {
   const parent = "https://cdn-prod-ccv.adobe.com/clip/rend/master.m3u8?hdnts=public-player-capability";
+  assert.equal(adobeUrl(parent, null, "clip"), parent);
   const best = hlsVariant("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=1280x720\nhls_720/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2,RESOLUTION=1920x1080\nhls_1080/index.m3u8\n", parent, "clip");
   assert.equal(best.height, 1080);
   assert.equal(new URL(best.url).search, new URL(parent).search);

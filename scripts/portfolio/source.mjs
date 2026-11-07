@@ -55,8 +55,11 @@ function richTextBlocks(body) {
 export function parsePage(html, path) {
   if (/<title>\s*Password Protected Page\s*<\/title>/i.test(html)) return { path, title: "Password Protected Page", protected: true,
     images: [], texts: [], youtube: [], adobe: [], css: [], metaImages: [], links: [], plainText: "Password-protected page. No protected content was accessed." };
-  const body = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1];
-  if (body == null) throw new Error(`Missing page body: ${path}`);
+  const rawBody = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1];
+  if (rawBody == null) throw new Error(`Missing page body: ${path}`);
+  // Adobe repeats grid images inside inert lightbox script templates. These are
+  // renditions, not visible gallery occurrences. Preserve offsets for source copy.
+  const body = rawBody.replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, match => " ".repeat(match.length));
   const images = [], lightboxes = new Map(), backgroundVideos = new Set();
   for (const match of body.matchAll(/<div\b[^>]*>/gi)) {
     const attrs = attributes(match[0]);
@@ -108,7 +111,7 @@ export function parsePlayer(html, id) {
 }
 
 export function adobeUrl(value, parent, id) {
-  const url = new URL(value, parent);
+  const url = new URL(value, parent || undefined);
   if (url.origin !== "https://cdn-prod-ccv.adobe.com" || !url.pathname.startsWith(`/${id}/rend/`) || url.username || url.password) throw new Error("Unexpected Adobe video source.");
   if (!url.search && parent) url.search = new URL(parent).search;
   return url.href;

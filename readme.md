@@ -1,13 +1,16 @@
 
 # Arnaud Belec
 
-**Full-site rollout approved:** the owner requested committing all local changes,
-confirmed P22 web-use licensing and approved the two pending additive CMS
-migrations after backup/rehearsal. Validation and populated-data rehearsal passed;
-see [`docs/full-site-rollout-20261107.md`](docs/full-site-rollout-20261107.md) for
-production migration/deployment status. Preserve Circle of Fashion's existing
-publication and all other draft/publication boundaries; newsletter sending remains
-disabled. The scoped-release history below is not the full-rollout receipt.
+**Full site deployed (2026-11-07):** <https://arnaud-belec.vercel.app>, deployment
+`dpl_56SgFgNQeU6qGcru4J9N37QjEVFv`, from code commit `dcd240e`. The approved
+site-expansion and homepage migrations are applied after verified backup/rehearsal;
+P22 web-use licensing was explicitly confirmed. `/` is now the fluid homepage and
+`/photos` the photography archive. Circle of Fashion remains published; both Video
+projects and the original Fashion selection remain private. Newsletter sending is
+explicitly disabled. See
+[`docs/full-site-rollout-20261107.md`](docs/full-site-rollout-20261107.md) for checks,
+preservation, cleanup and remaining editorial/provider gates. Scoped history below
+describes the earlier releases, not the current full-site layout.
 
 **Production content intake (2026-11-06):** the scoped Video/Fashion release is
 live, with eight new public photographs (16 total), 11 private Fashion images and
@@ -42,7 +45,13 @@ CMS destinations. It does not upload or publish. See
 [`docs/adobe-portfolio-intake.md`](docs/adobe-portfolio-intake.md) for commands,
 duplicate-review limits and the separate CMS/publication gates.
 
-Use Node **24.22.1** (`.nvmrc`; Payload also supports `^22.23.4`), then run `npm install` and `npm run dev`. Open the local URL shown in the terminal. The source now has a separate homepage at `/` and the photography archive at `/photos`; existing `/photos/<filename>` links are unchanged. The expansion is a local source update, not a production deployment. An empty catalogue produces explicit empty states rather than presenting `public/test-image.jpg` as published work; that existing asset is retained for local synthetic fixtures.
+The separately authorized 2026-11-07 API intake added **25 verified private Media
+items and nine private drafts**, preserving existing content and publishing nothing.
+Photography, unassigned assets and missing YouTube originals remain separate gates;
+the intake document records verification, corrected gallery ordering and temporary
+API-session revocation.
+
+Use Node **24.22.1** (`.nvmrc`; Payload also supports `^22.23.4`), then run `npm install` and `npm run dev`. Open the local URL shown in the terminal. The deployed site has a separate homepage at `/` and the photography archive at `/photos`; existing `/photos/<filename>` links are unchanged. An empty catalogue produces explicit empty states rather than presenting `public/test-image.jpg` as published work; that existing asset is retained for local synthetic fixtures.
 
 The page uses Tailwind CSS v4 utilities and Motion to drift the central photo's extracted palette colours around the photo (up to seven in the new MMCQ model below). Each gradient starts outside the photo on page load, with random candidates chosen across the free area and spaced from gradients already placed; its size still depends only on its palette weight. The entire archive page, including the gallery, uses a subdued background extracted from the central photo's dominant edge colour. Each detail page uses its own photo's background colour throughout. Text and focus indicators adjust for light or dark backgrounds. The central photo and detail-page photo keep their original aspect ratios within a 66.667vw-wide frame (viewport width minus 32px on small screens) and an 80vh height limit. Their measured size drives the moving gradients' collision bounds as the viewport or photo changes. Each gradient's diameter is set by its palette weight: an equal share of the actual palette is 100vw, with smaller shares shrinking toward 75vw and larger shares growing toward 125vw; a single-colour palette stays at 100vw. The archive and detail pages render their palette gradients and animated monochrome grain in one Three.js/WebGL canvas below the opaque photographs and HTML controls, keeping photographs sharp. The colour wash can spill into the gallery below the hero section, while the gradient centers remain constrained to the hero section and avoid the photo. Selecting a colour ranks the gallery below by similarity to that swatch: it shows every photo within the colour-distance threshold, or fills with the closest eligible photos to reach five when available. It does not change the central displayed photo. Clicking the central photo or a gallery thumbnail opens its `/photos/<filename>` page. Each detail page shows that photograph with its own moving palette gradients and photographs ranked by colour similarity; selecting a gradient uses the same five-result minimum, and clicking the full photograph restores the full palette. The photographer name links back to the archive at `/`. `app/globals.css` holds the fallback glow utility.
 
@@ -157,7 +166,7 @@ changed. That admin release did not change R2 upload settings. Sign in at
 
 ### Non-photograph styling
 
-**Site-wide typography source update (2026-11-05; local only):** all routes now
+**Site-wide typography (implemented 2026-11-05; deployed 2026-11-07):** all routes now
 use **P22 Cezanne Pro, cursive**, including public pages, `/photos` and photograph
 details, controls, native `/cms`, administration and previews. One shared
 `next/font/local` definition in `app/site-font.ts` exposes `--font-site`;
@@ -383,11 +392,11 @@ public images and palette together. No rebuild is needed after publication.
 
 This source requires the additive
 `migrations/20261105_120000_homepage.ts` migration **after** the site expansion
-migration. It has only been applied to isolated local test databases; production
-migration, configuration and deployment require separate approval. See
+migration. Both migrations were separately approved and applied to production
+for the full-site rollout after verified populated-data rehearsal. See
 [`docs/homepage.md`](docs/homepage.md) for validation, privacy and rollout details.
 
-## Public portfolio expansion — local source, not deployed
+## Public portfolio expansion — deployed, optional services still gated
 
 **Circle of Fashion (2026-11-06; deployed exception):** live at
 [`/fashion/circle-of-fashion`](https://arnaud-belec.vercel.app/fashion/circle-of-fashion).
@@ -401,8 +410,9 @@ admin session was revoked. A separately approved Arnaud-only gateway correction
 raised client admission to 120 while retaining six PostgreSQL backends, zero
 reserve and existing authentication/TLS/network boundaries. See
 [`docs/circle-of-fashion.md`](docs/circle-of-fashion.md) for exact release scope,
-verification, cleanup and remaining limitations. The wider expansion below is
-still local-only; do not deploy all of main.
+verification, cleanup and remaining limitations. That scoped release's font/layout
+boundary is historical: the subsequently approved full deployment now includes P22
+and the wider application below while preserving Circle's content/publication.
 
 The staged implementation and release gates are documented in
 [`docs/site-expansion.md`](docs/site-expansion.md). Existing native Journal content,
@@ -411,7 +421,7 @@ photographs, versions, Auth identities and original media are retained.
 | Stage | Implementation | External launch gate |
 | --- | --- | --- |
 | Entrance/navigation | Separate `/`, `/photos`, `/video`, `/fashion`; unchanged Journal/detail URLs | Review with real selected work |
-| Projects/settings | Native draft/versioned Videos, Fashion projects and Site settings; private project preview | Approve/apply additive migration, then enable expansion |
+| Projects/settings | Native draft/versioned Videos, Fashion projects and Site settings; private project preview | Migrations applied; new settings/project publication remains editorial |
 | Film/fashion | Published-only indexes/details, native playback, rich text, credits/galleries | Real project assets; large-file/transcoding work is separate |
 | Photography modes | Published curated Colour/Black & white membership, All fallback and genuine monochrome peek | Classify real photographs in Site settings |
 | Pixel finish | Shared actual photo grain/dither/glow, restrained pastel atmosphere and background-only waves | Final review with real content; no UI-hit-target distortion |
@@ -421,9 +431,10 @@ photographs, versions, Auth identities and original media are retained.
 | Domain/email | Documented Vercel/domain/mailbox/sender rollout | Ownership/purchase, DNS and mailbox/provider approval |
 | DVD commerce | Intentionally deferred; no inactive checkout controls | Products, stock, prices, shipping and fulfilment decisions |
 
-`ARNAUD_SITE_EXPANSION_ENABLED` defaults off and must remain off until the reviewed
-`20261104_120000_site_expansion` migration is applied using the existing Arnaud-only
-migration identity. Disabled loaders return empty/default settings without querying
+`ARNAUD_SITE_EXPANSION_ENABLED` defaults off for new installations and must remain
+off until the reviewed `20261104_120000_site_expansion` migration is applied using
+the existing Arnaud-only migration identity. Production now has this migration and
+the homepage follow-up, with expansion enabled. Disabled loaders return empty/default settings without querying
 new tables. Source routing/visuals are independent of this database-readiness gate.
 Do not run schema pushing or migrations during a Vercel build. The schema-only
 generator is `npx tsx scripts/cms/generate-site-migration.ts`; it never connects to
@@ -442,7 +453,7 @@ Use `npm run test:site` for isolated visual/audio/viewer/newsletter checks and
 lint, typecheck, palette, admin, blog, storage and build checks. All local tests
 must use synthetic configuration and mocked providers, not production credentials.
 
-Local verification passed 117 automated tests, 45 strict desktop/mobile browser
+The earlier local verification passed 117 automated tests, 45 strict desktop/mobile browser
 checks, 25 disabled production-route checks, lint, TypeScript and CMS/expansion
 enabled/disabled builds. Independent visual review returned **ship** for the
 synthetic screenshots only. These checks do not authorize a production migration,

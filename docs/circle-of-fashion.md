@@ -5,6 +5,11 @@ The owner-approved import, publication and scoped layout release completed on
 2026-11-06 (promotion at `2026-11-07T02:30:09Z` UTC). The production record below
 supersedes the earlier local-only gates; it does not approve the rest of main.
 
+The owner subsequently approved and deployed the full checkout, including P22 and
+the homepage, with Circle's content/publication preserved. See
+[`full-site-rollout-20261107.md`](full-site-rollout-20261107.md). The original
+scoped-release/font boundaries below are historical, not the current app scope.
+
 The Fashion detail renderer borrows the centred **672px** reading column from
 Dexter's portfolio writeups, retaining Arnaud's existing font, colours, navigation
 and atmosphere. The exact introduction precedes the first photograph. Cover and
