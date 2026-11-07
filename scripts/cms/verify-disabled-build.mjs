@@ -14,7 +14,7 @@ await new Promise(resolve => reservation.close(resolve));
 const require = createRequire(import.meta.url);
 const child = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "--hostname", "127.0.0.1", "--port", String(port)], {
   env: {
-    ...process.env, ARNAUD_CMS_ENABLED: "false",
+    ...process.env, ARNAUD_CMS_ENABLED: "false", ARNAUD_SITE_EXPANSION_ENABLED: "false", ARNAUD_NEWSLETTER_ENABLED: "false",
     ARNAUD_CMS_DATABASE_URL: "postgresql://127.0.0.1:1/must-not-connect",
     SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
     SUPABASE_SERVICE_ROLE_KEY: "", SUPABASE_ADMIN_USER_IDS: "",
@@ -38,11 +38,28 @@ const ready = new Promise((resolve, reject) => {
 const checks = [];
 try {
   await ready;
-  for (const path of ["/admin", "/admin/posts", "/cms", "/cms/login", "/cms/photographs", "/cms/collections/posts/42345678-1234-4234-8234-123456789abc", "/cms/collections/posts/42345678-1234-4234-8234-123456789abc/versions/52345678-1234-4234-8234-123456789abc", "/api/cms/posts", "/api/cms/cms-users/me"]) {
+  for (const path of ["/admin", "/admin/posts", "/cms", "/cms/login", "/cms/photographs", "/cms/collections/posts/42345678-1234-4234-8234-123456789abc", "/cms/collections/posts/42345678-1234-4234-8234-123456789abc/versions/52345678-1234-4234-8234-123456789abc", "/api/cms/posts", "/api/cms/cms-users/me", "/api/admin/posts", "/blog", "/blog/media/42345678-1234-4234-8234-123456789abc"]) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(15000), redirect: "manual" });
-    await response.arrayBuffer();
-    const expected = path.startsWith("/admin") ? 200 : 404;
+    const body = await response.text();
+    // With Supabase unconfigured the shared client auth shell renders before
+    // its protected children, including the retired journal's redirect.
+    const expected = path === "/admin" || path === "/admin/posts" || path === "/blog" ? 200 : path === "/api/admin/posts" ? 410 : 404;
     assert.equal(response.status, expected, path);
+    if (path === "/admin" || path === "/admin/posts") {
+      assert.match(body, /Admin setup required/, path);
+      assert.doesNotMatch(body, /data-lexical-editor|bn-editor/, "The disabled admin shell must not render a journal editor.");
+    }
+    checks.push({ path, status: response.status });
+  }
+  for (const path of ["/", "/photos", "/video", "/fashion", "/video/not-a-published-project", "/fashion/not-a-published-project", "/cms/project-preview", "/api/cms/videos", "/api/cms/fashion-projects", "/api/cms/globals/site-settings", "/api/cms/newsletter-subscribers"]) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(15000), redirect: "manual" });
+    await response.text();
+    assert.equal(response.status, ["/", "/photos", "/video", "/fashion"].includes(path) ? 200 : 404, path);
+    checks.push({ path, status: response.status });
+  }
+  for (const path of ["/api/newsletter/subscribe", "/api/newsletter/dispatch"]) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(15000) });
+    assert.equal(response.status, 503, path);
     checks.push({ path, status: response.status });
   }
 } finally {

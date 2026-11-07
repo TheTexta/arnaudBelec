@@ -2,9 +2,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildConfig, type CollectionConfig } from "payload";
 import { postgresAdapter } from "@payloadcms/db-postgres";
+import { lexicalEditor, UploadFeature, FixedToolbarFeature, LinkFeature } from "@payloadcms/richtext-lexical";
 import { isCmsUser, supabaseStrategy } from "./lib/cms/auth";
 import { cmsEnabled } from "./lib/cms/session";
-import { LegacyRevisions, Posts } from "./lib/cms/posts";
+import { Posts } from "./lib/cms/posts";
+import { Media, journalStorage } from "./lib/cms/media";
+import { MAX_MEDIA_BYTES } from "./lib/blog/media";
+import { Videos, FashionProjects } from "./lib/cms/projects";
+import { SiteSettings } from "./lib/cms/site-settings";
+import { NewsletterSubscribers, NewsletterDeliveries, NewsletterRecipients } from "./lib/newsletter/collections";
+import { queuePostAnnouncement } from "./lib/newsletter/queue";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const enabled = cmsEnabled();
@@ -31,11 +38,12 @@ export default buildConfig({
   graphQL: { disable: true },
   admin: {
     avatar: "default",
-    theme: "dark",
+    theme: "all",
     user: "cms-users",
     meta: { titleSuffix: "— Arnaud Belec", robots: "noindex, nofollow" },
     importMap: { baseDir: root, importMapFile: path.resolve(root, "app/(payload)/cms/importMap.ts") },
     components: {
+      providers: ["/components/cms/SystemTheme#SystemTheme"],
       afterNavLinks: ["/components/cms/Navigation#Navigation"],
       logout: { Button: "/components/cms/SessionViews#LogoutButton" },
       views: {
@@ -44,10 +52,18 @@ export default buildConfig({
         inactivity: { Component: "/components/cms/SessionViews#Logout", path: "/logout-inactivity", exact: true },
         photographs: { Component: "/components/cms/PhotographsView#PhotographsView", path: "/photographs", exact: true },
         preview: { Component: "/components/cms/PhotographsView#PreviewView", path: "/preview", exact: true },
+        projectPreview: { Component: "/components/cms/ProjectPreview#ProjectPreview", path: "/project-preview", exact: true },
       },
     },
   },
-  collections: [Users, Posts, LegacyRevisions],
+  editor: lexicalEditor({ features: ({ defaultFeatures }) => [
+    ...defaultFeatures.filter(feature => !["upload", "relationship", "link"].includes(feature.key)),
+    LinkFeature({ enabledCollections: ["posts"] }), UploadFeature({ enabledCollections: ["media"] }), FixedToolbarFeature(),
+  ] }),
+  collections: [Users, { ...Posts, hooks: { ...Posts.hooks, afterChange: [...(Posts.hooks?.afterChange ?? []), queuePostAnnouncement] } }, Media, Videos, FashionProjects, NewsletterSubscribers, NewsletterDeliveries, NewsletterRecipients],
+  globals: [SiteSettings],
+  plugins: journalStorage(enabled),
+  upload: { limits: { fileSize: MAX_MEDIA_BYTES } },
   db: postgresAdapter({
     pool: { connectionString: process.env.ARNAUD_CMS_DATABASE_URL || "postgresql://localhost:55439/postgres", max: 3, connectionTimeoutMillis: 5000 },
     schemaName: "arnaud_cms", idType: "uuid", allowIDOnCreate: true,

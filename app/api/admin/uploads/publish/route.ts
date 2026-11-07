@@ -5,6 +5,8 @@ import { storagePathFor, verifyUploadTicket } from "@/lib/admin/upload-ticket";
 import { capturedDate, optionalText, sortOrder, validateDimensions, validateFilename } from "@/lib/admin/validation";
 import { reservationFor, verifyAndPromote } from "@/lib/admin/r2-upload";
 import { r2Storage } from "@/lib/photographs/storage.mjs";
+import { MAXIMUM_SAMPLE_BYTES } from "@/lib/palette/config.mjs";
+import { validateImageSample } from "@/lib/admin/image-sample.mjs";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
         throw new AdminRequestError(error instanceof Error ? error.message : "Invalid photograph details.", 400);
       }
       const sample = form.get("sample");
-      if (!(sample instanceof File) || sample.size < 1 || sample.size > 200_000) {
+      if (!(sample instanceof File) || sample.size < 1 || sample.size > MAXIMUM_SAMPLE_BYTES) {
         throw new AdminRequestError("Create a valid image sample before publishing.", 400);
       }
       const sampleBuffer = Buffer.from(await sample.arrayBuffer());
@@ -83,16 +85,16 @@ export async function POST(request: Request) {
       } catch {
         throw new AdminRequestError("The image sample could not be read.", 400);
       }
-      const longestSide = Math.max(dimensions.width, dimensions.height);
-      const expectedWidth = Math.max(1, Math.round(dimensions.width * Math.min(1, 96 / longestSide)));
-      const expectedHeight = Math.max(1, Math.round(dimensions.height * Math.min(1, 96 / longestSide)));
-      if (sampleMetadata.format !== "png" || sampleMetadata.width !== expectedWidth || sampleMetadata.height !== expectedHeight) {
-        throw new AdminRequestError("The image sample does not match the selected image dimensions.", 400);
+      let sampleLongestSide;
+      try {
+        sampleLongestSide = validateImageSample(sampleMetadata, dimensions);
+      } catch (error) {
+        throw new AdminRequestError(error instanceof Error ? error.message : "Invalid image sample.", 400);
       }
 
       let analysis;
       try {
-        analysis = await analyseImage(sampleBuffer, ticket.photographId);
+        analysis = await analyseImage(sampleBuffer, ticket.photographId, { sampleLongestSide });
       } catch {
         throw new AdminRequestError("The image sample could not be analysed.", 400);
       }

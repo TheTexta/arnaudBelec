@@ -1,0 +1,10 @@
+.controls { color: inherit; font: inherit; max-width: 65ch; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.controls button { min-height: 44px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.controls button:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; }
+.controls button[aria-pressed="true"] { border-width: 2px; padding: 7px 11px; }
+.controls button:disabled { cursor: not-allowed; border-style: dashed; }
+.controls :focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.volume { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.volume input { width: 100px; min-height: 44px; accent-color: currentColor; }
+.controls p { margin: 8px 0 0; font-size: 18px; line-height: 1.65; }

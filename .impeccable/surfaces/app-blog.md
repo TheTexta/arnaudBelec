@@ -2,7 +2,7 @@
 version: 1
 slug: "app-blog"
 primary_target: "app/blog"
-related_targets: ["app/admin"]
+related_targets: ["app/admin", "components/cms", "app/(payload)"]
 ---
 
 # Journal and administration
@@ -10,6 +10,14 @@ related_targets: ["app/admin"]
 Scope: `/blog`, journal reading and preview, `/admin/posts`, and `/admin`. Read mode for the journal; Operate for administration. Existing documents, controls, publication, recovery and upload semantics remain intact. Photograph pages are excluded.
 
 ## Direction contract
+
+**Native CMS exception (2026-11-04):** `/cms` now follows the separately approved
+Dexter/Elliot monochrome admin direction: black/white/neutral greys, square controls,
+compact native Payload layout, Automatic system theme plus remembered Light/Dark
+overrides. The warm contract below continues to govern `/blog` and the private
+article-preview canvas, not native administration. Public photograph pages and the
+CMS-disabled photography admin remain unchanged. See the native-admin exception
+in `DESIGN.md` and `components/cms/cms.css` for this narrower source authority.
 
 **THESIS:** Bring Arnaud's old Adobe Portfolio identity into a readable journal and usable administration, not an unrelated cream CMS.
 

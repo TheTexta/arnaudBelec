@@ -7,7 +7,7 @@ test("journal CORS permits direct upload and private preview only from the produ
   assert.equal(rules.length, 1);
   assert.deepEqual(rules[0].AllowedOrigins, ["https://arnaud-belec.vercel.app"]);
   assert.deepEqual(new Set(rules[0].AllowedMethods), new Set(["PUT", "GET", "HEAD"]));
-  assert.deepEqual(rules[0].AllowedHeaders, ["Content-Type"]);
+   assert.deepEqual(rules[0].AllowedHeaders, ["Content-Type", "If-None-Match", "Range"]);
   assert.deepEqual(rules[0].ExposeHeaders, ["ETag"]);
   assert.equal(rules[0].MaxAgeSeconds, 3600);
 });

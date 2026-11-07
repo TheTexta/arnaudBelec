@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: var(--font-site), cursive;
+  --font-serif: var(--font-site), cursive;
+  --font-mono: var(--font-site), cursive;
+}
+
 @utility orb-glow {
   background: radial-gradient(
     circle,

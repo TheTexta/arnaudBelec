@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useAnimationFrame } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { BloomLayer, type OrbPositions } from "./bloom-layer";
-import { findSimilarPhotographs } from "@/lib/photographs/similar-colours";
+import { eligiblePhotographs, selectPresentationPhotographs, type PhotoGroups, type PhotoMode } from "@/lib/photographs/presentation";
 import { foregroundForBackground } from "@/lib/photographs/page-colours";
+import { imagePlaceholder } from "@/lib/photographs/image-placeholder";
+import { playColourChord } from "@/lib/audio/colour-chords";
 import type { PublicPhotograph } from "@/lib/supabase-public";
 import { GradientOrb, type MeasuredBounds } from "./gradient-orb";
 
@@ -22,7 +23,7 @@ const colours = [
 
 type ColourId = (typeof colours)[number]["id"];
 type ColourSlot = Omit<(typeof colours)[number], "hex"> & { hex: string };
-type GradientColour = ColourSlot & { lab: readonly [number, number, number]; weight: number };
+type GradientColour = ColourSlot & { weight: number };
 
 type GalleryPhotograph = PublicPhotograph & {
   figureStyle?: CSSProperties;
@@ -30,63 +31,55 @@ type GalleryPhotograph = PublicPhotograph & {
   imageStyle?: CSSProperties;
 };
 
-function hexToLab(hex: string): readonly [number, number, number] {
-  const channels = [1, 3, 5].map((offset) => {
-    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  const x = (channels[0] * 0.4124 + channels[1] * 0.3576 + channels[2] * 0.1805) / 0.95047;
-  const y = (channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722);
-  const z = (channels[0] * 0.0193 + channels[1] * 0.1192 + channels[2] * 0.9505) / 1.08883;
-  const pivot = (value: number) => value > 216 / 24389
-    ? Math.cbrt(value)
-    : ((24389 / 27) * value + 16) / 116;
-  const pivotX = pivot(x);
-  const pivotY = pivot(y);
-  const pivotZ = pivot(z);
-  return [116 * pivotY - 16, 500 * (pivotX - pivotY), 200 * (pivotY - pivotZ)];
+const photoModes = [
+  { id: "all", label: "All" },
+  { id: "colour", label: "Colour" },
+  { id: "monochrome", label: "Black & white" },
+] as const;
+
+export default function PhotoPage({ photographs, photoGroups }: {
+  photographs: PublicPhotograph[];
+  photoGroups?: PhotoGroups;
+}) {
+  const [mode, setMode] = useState<PhotoMode>("all");
+  const modeButtonsRef = useRef<Record<PhotoMode, HTMLButtonElement | null>>({ all: null, colour: null, monochrome: null });
+  const changeMode = useCallback((nextMode: PhotoMode) => {
+    setMode(nextMode);
+    modeButtonsRef.current[nextMode]?.focus();
+  }, []);
+  const eligible = useMemo(() => eligiblePhotographs(photographs, mode, photoGroups), [photographs, mode, photoGroups]);
+  const monochromePreview = useMemo(() => eligiblePhotographs(photographs, "monochrome", photoGroups)[0], [photographs, photoGroups]);
+
+  const background = eligible[0]?.backgroundHex ?? "#ffffff";
+  return (
+    <div className="relative">
+      <div className="absolute inset-x-0 top-0 z-4 flex justify-center px-4 py-3" style={{ color: foregroundForBackground(background) }}>
+        <div role="group" aria-label="Photograph selection" className="flex flex-wrap justify-center" style={{ backgroundColor: background }}>
+          {photoModes.map(({ id, label }) => (
+            <button
+              key={id}
+              ref={(element) => { modeButtonsRef.current[id] = element; }}
+              type="button"
+              aria-pressed={mode === id}
+              onClick={() => changeMode(id)}
+              className={`min-h-11 cursor-pointer px-3 text-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 ${mode === id ? "underline" : ""}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <PhotoArchive key={mode} photographs={eligible} mode={mode} onModeChange={changeMode} monochromePreview={monochromePreview} />
+    </div>
+  );
 }
 
-const defaultGradientColours: GradientColour[] = colours.map((colour) => ({
-  ...colour,
-  lab: hexToLab(colour.hex),
-  weight: 1 / colours.length,
-}));
-
-
-function closestColourAt(
-  stage: HTMLElement,
-  photo: HTMLElement | null,
-  pointerX: number,
-  pointerY: number,
-): ColourId | null {
-  if (photo) {
-    const rect = photo.getBoundingClientRect();
-    if (pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom) {
-      return null;
-    }
-  }
-
-  let closest: ColourId | null = null;
-  let closestDistance = Infinity;
-
-  for (const button of stage.querySelectorAll<HTMLButtonElement>("[data-colour-orb]")) {
-    const rect = button.getBoundingClientRect();
-    const dx = pointerX - (rect.left + rect.width / 2);
-    const dy = pointerY - (rect.top + rect.height / 2);
-    const distance = Math.hypot(dx, dy);
-    const colourId = button.dataset.colourOrb as ColourId | undefined;
-
-    if (colourId && distance <= rect.width / 2 && distance < closestDistance) {
-      closest = colourId;
-      closestDistance = distance;
-    }
-  }
-
-  return closest;
-}
-
-export default function PhotoPage({ photographs }: { photographs: PublicPhotograph[] }) {
+function PhotoArchive({ photographs, mode, onModeChange, monochromePreview }: {
+  photographs: PublicPhotograph[];
+  mode: PhotoMode;
+  onModeChange: (mode: PhotoMode) => void;
+  monochromePreview?: PublicPhotograph;
+}) {
   const [selectedColour, setSelectedColour] = useState<ColourId | null>(null);
   const [hoveredColour, setHoveredColour] = useState<ColourId | null>(null);
   const [displayedColour, setDisplayedColour] = useState<ColourId | null>(null);
@@ -95,41 +88,6 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
   const photoRef = useRef<HTMLElement | null>(null);
   const boundsRef = useRef<MeasuredBounds | null>(null);
   const orbPositionsRef = useRef<OrbPositions>({});
-  const pointerRef = useRef<{ x: number; y: number } | null>(null);
-  const hoveredRef = useRef<ColourId | null>(null);
-
-  const updateHoveredColour = useCallback(() => {
-    const stage = stageRef.current;
-    const pointer = pointerRef.current;
-    const nearest = stage && pointer
-      ? closestColourAt(stage, photoRef.current, pointer.x, pointer.y)
-      : null;
-
-    if (nearest !== hoveredRef.current) {
-      hoveredRef.current = nearest;
-      setHoveredColour(nearest);
-    }
-  }, []);
-
-  useAnimationFrame(updateHoveredColour);
-
-  const trackPointer = (event: PointerEvent<HTMLElement>) => {
-    if (event.pointerType === "touch") return;
-    pointerRef.current = { x: event.clientX, y: event.clientY };
-    updateHoveredColour();
-  };
-
-  const clearPointer = () => {
-    pointerRef.current = null;
-    updateHoveredColour();
-  };
-
-  const selectAtPointer = (event: PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || !stageRef.current) return;
-    const nearest = closestColourAt(stageRef.current, photoRef.current, event.clientX, event.clientY);
-    if (nearest) setSelectedColour((current) => current === nearest ? null : nearest);
-  };
-
   useEffect(() => {
     const stage = stageRef.current;
     const photo = photoRef.current;
@@ -179,17 +137,11 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
   const gradientColours = useMemo<GradientColour[]>(() => {
     const palette = heroPhotograph?.palette.slice(0, colours.length) ?? [];
 
-    return colours.map((slot, index) => {
-      const paletteColour = palette[index];
-      if (!paletteColour) return defaultGradientColours[index];
-
-      return {
-        ...slot,
-        hex: paletteColour.hex,
-        lab: [paletteColour.labL, paletteColour.labA, paletteColour.labB],
-        weight: paletteColour.weight,
-      };
-    });
+    return palette.map((paletteColour, index) => ({
+      ...colours[index],
+      hex: paletteColour.hex,
+      weight: paletteColour.weight,
+    }));
   }, [heroPhotograph]);
 
   const hasSupabasePhotographs = photographs.length > 0;
@@ -201,26 +153,12 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
     if (!displayedColour || !heroPhotograph) return sourcePhotographs;
 
     const paletteIndex = colours.findIndex((colour) => colour.id === displayedColour);
-    if (paletteIndex < 0) return sourcePhotographs;
+    if (paletteIndex < 0 || paletteIndex >= gradientColours.length) return sourcePhotographs;
 
-    const hasCompletePalette = heroPhotograph.palette.length >= colours.length;
-    const selectedGradient = gradientColours[paletteIndex];
-    const source = hasCompletePalette ? heroPhotograph : {
-      ...heroPhotograph,
-      palette: [{
-        hex: selectedGradient.hex,
-        labL: selectedGradient.lab[0],
-        labA: selectedGradient.lab[1],
-        labB: selectedGradient.lab[2],
-        weight: 1,
-      }],
-    };
-
-    return findSimilarPhotographs(
-      source,
+    return selectPresentationPhotographs(
       sourcePhotographs,
-      hasCompletePalette ? paletteIndex : 0,
-      { includeCurrent: true },
+      heroPhotograph,
+      paletteIndex,
     );
   }, [displayedColour, gradientColours, heroPhotograph, sourcePhotographs]);
   const selectedName = colours.find((colour) => colour.id === selectedColour)?.name;
@@ -236,6 +174,7 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
       alt={heroPhotograph.altText?.trim() || heroPhotograph.title?.trim() || "Photograph by Arnaud Belec"}
       width={heroPhotograph.width}
       height={heroPhotograph.height}
+      placeholder={imagePlaceholder(heroPhotograph.backgroundHex)}
       priority
       loading="eager"
       sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
@@ -250,38 +189,40 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
 
   return (
     <main
-      className="min-h-svh w-full overflow-clip"
+      className="relative min-h-svh w-full overflow-clip"
       style={{ backgroundColor: pageBackground, color: foregroundForBackground(pageBackground) }}
     >
+      {heroPhotograph ? <h1 className="sr-only">Photographs</h1> : null}
       <section
         ref={stageRef}
         className="relative isolate grid h-screen w-screen place-items-center"
         aria-label="Select a colour to explore photographs"
-        onPointerEnter={trackPointer}
-        onPointerMove={trackPointer}
-        onPointerLeave={clearPointer}
-        onPointerDown={selectAtPointer}
       >
-        <BloomLayer
+        {heroPhotograph ? <BloomLayer
           backgroundColour={pageBackground}
           colours={gradientColours}
           positionsRef={orbPositionsRef}
           selectedId={selectedColour}
           hoveredId={hoveredColour}
-        />
-        {gradientColours.map((colour) => (
+        /> : null}
+        {heroPhotograph ? gradientColours.map((colour) => (
           <GradientOrb
             key={colour.id}
             colour={colour}
             paletteSize={gradientColours.length}
             isSelected={selectedColour === colour.id}
             isHovered={hoveredColour === colour.id}
+            stageRef={stageRef}
             boundsRef={boundsRef}
             positionsRef={orbPositionsRef}
             onPositionChange={updateOrbPosition}
-            onKeyboardSelect={() => setSelectedColour((current) => current === colour.id ? null : colour.id)}
+            onHoverChange={(hovered) => setHoveredColour((current) => hovered ? colour.id : current === colour.id ? null : current)}
+            onSelect={() => {
+              playColourChord(colours.findIndex((slot) => slot.id === colour.id));
+              setSelectedColour((current) => current === colour.id ? null : colour.id);
+            }}
           />
-        ))}
+        )) : null}
 
         {heroPhotograph ? (
           heroHref ? (
@@ -309,18 +250,46 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
         ) : (
           <div
             ref={setPhotoRef}
-            className={heroClassName}
-            style={heroStyle}
-            aria-label="No photographs available"
-          />
+            className="relative z-2 max-w-md px-6 text-center"
+          >
+            <h1 className="text-xl">{mode === "all" ? "No photographs available yet." : `No ${mode === "colour" ? "colour" : "black & white"} photographs selected yet.`}</h1>
+            {mode !== "all" ? (
+              <>
+                <p className="mt-3 text-sm">Explore the full archive while this selection takes shape.</p>
+                <button type="button" onClick={() => onModeChange("all")} className="mt-4 min-h-11 cursor-pointer px-3 text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2">Show all photographs</button>
+              </>
+            ) : null}
+          </div>
         )}
+        {heroPhotograph && mode !== "monochrome" && monochromePreview && monochromePreview.id !== heroPhotograph.id ? (
+          <button
+            type="button"
+            onClick={() => onModeChange("monochrome")}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="group absolute bottom-4 right-4 z-3 flex min-h-11 cursor-pointer items-end gap-3 p-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+            style={{ backgroundColor: pageBackground }}
+          >
+            <span className="pb-1 underline underline-offset-4">Explore black & white</span>
+            <span className="block origin-bottom-right transition-transform duration-200 ease-out group-hover:scale-110 group-focus-visible:scale-110 motion-reduce:hidden [@media(hover:none)]:hidden">
+              <Image
+                src={monochromePreview.src}
+                alt=""
+                width={monochromePreview.width}
+                height={monochromePreview.height}
+                placeholder={imagePlaceholder(monochromePreview.backgroundHex)}
+                sizes="56px"
+                className="block max-h-24 w-auto max-w-12 object-contain"
+              />
+            </span>
+          </button>
+        ) : null}
       </section>
 
       <section className="relative z-3 flex flex-col justify-center items-center w-full min-w-[320px] py-4" aria-label="Photograph gallery">
         <p className="sr-only" aria-live="polite">
           {selectedName
             ? `Showing ${shownPhotographs.length} ${selectedName} photographs.`
-            : `Showing all ${shownPhotographs.length} photographs.`}
+            : `Showing ${shownPhotographs.length} photographs in ${photoModes.find(({ id }) => id === mode)?.label}.`}
         </p>
         <div className={`columns-3 gap-x-[clamp(8px,0.65vw,16px)] transition-opacity motion-reduce:transition-none max-[900px]:columns-2 max-[900px]:gap-x-2 ${isFading ? "opacity-0 duration-100" : "opacity-100 duration-300"}`}>
           {shownPhotographs.map((photograph) => {
@@ -330,6 +299,7 @@ export default function PhotoPage({ photographs }: { photographs: PublicPhotogra
                 alt={hasSupabasePhotographs ? photograph.altText?.trim() || photograph.title?.trim() || "Photograph by Arnaud Belec" : ""}
                 width={photograph.width}
                 height={photograph.height}
+                placeholder={imagePlaceholder(photograph.backgroundHex)}
                 sizes="(max-width: 900px) 50vw, 22vw"
                 loading={photograph.id === heroPhotograph?.id ? "eager" : "lazy"}
                 className={photograph.imageClassName ?? "block h-auto w-full"}

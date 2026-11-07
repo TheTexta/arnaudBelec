@@ -1,0 +1,3 @@
+# Traefik terminates verified public TLS. This unpublished socket accepts only
+# the exact runtime user/database alias; no admin console or migration identity.
+host arnaud_cms arnaud_cms_runtime 0.0.0.0/0 scram-sha-256

@@ -1,0 +1,13 @@
+.cms-home-colour { position: relative; padding-right: 68px; }
+.cms-home-colour input[type="color"] { position: absolute; right: 0; top: 28px; width: 52px; height: 42px; padding: 3px; border: 1px solid var(--theme-elevation-300); background: var(--theme-input-bg); cursor: pointer; }
+.cms-home-photographs { margin-bottom: 24px; }
+.cms-home-source { margin-bottom: 24px; }
+.cms-home-source select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--theme-elevation-300); background: var(--theme-input-bg); color: var(--theme-text); border-radius: 0; font: inherit; }
+.cms-home-photographs legend { margin-bottom: 8px; }
+.cms-home-photographs > p { margin-block: 8px; }
+.cms-home-photograph-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-block: 12px; }
+.cms-home-photograph-options button { display: grid; align-content: start; gap: 8px; padding: 8px; color: var(--theme-text); border: 1px solid var(--theme-elevation-300); background: transparent; text-align: left; cursor: pointer; }
+.cms-home-photograph-options button[aria-pressed="true"] { outline: 2px solid var(--theme-text); outline-offset: 1px; }
+.cms-home-photograph-options img { width: 100%; height: 100px; object-fit: contain; }
+.cms-home-photograph-options span { overflow-wrap: anywhere; }
+.cms-home-photographs > button { padding: 8px 12px; color: var(--theme-text); border: 1px solid var(--theme-elevation-300); background: transparent; cursor: pointer; }

@@ -21,7 +21,8 @@ nextEnv.loadEnvConfig(process.cwd());
 const usage = `Usage: npm run photos:import -- [options] <image> [image ...]
 
 Uploads JPEG, PNG, and WebP photographs to the ${PHOTOGRAPH_BUCKET} bucket and
-publishes their image metadata and seven-colour OKLab k-medoids palettes in one database RPC.
+publishes their image metadata and up-to-seven-colour, background-aware MMCQ palettes in one database RPC.
+Apply the approved MMCQ compatibility migration before publication.
 
 Options:
   --manifest <file>       JSON object keyed by an image argument or basename.

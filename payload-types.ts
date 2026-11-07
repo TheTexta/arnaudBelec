@@ -69,7 +69,12 @@ export interface Config {
   collections: {
     'cms-users': CmsUser;
     posts: Post;
-    'legacy-revisions': LegacyRevision;
+    media: Media;
+    videos: Video;
+    'fashion-projects': FashionProject;
+    'newsletter-subscribers': NewsletterSubscriber;
+    'newsletter-deliveries': NewsletterDelivery;
+    'newsletter-recipients': NewsletterRecipient;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -79,7 +84,12 @@ export interface Config {
   collectionsSelect: {
     'cms-users': CmsUsersSelect<false> | CmsUsersSelect<true>;
     posts: PostsSelect<false> | PostsSelect<true>;
-    'legacy-revisions': LegacyRevisionsSelect<false> | LegacyRevisionsSelect<true>;
+    media: MediaSelect<false> | MediaSelect<true>;
+    videos: VideosSelect<false> | VideosSelect<true>;
+    'fashion-projects': FashionProjectsSelect<false> | FashionProjectsSelect<true>;
+    'newsletter-subscribers': NewsletterSubscribersSelect<false> | NewsletterSubscribersSelect<true>;
+    'newsletter-deliveries': NewsletterDeliveriesSelect<false> | NewsletterDeliveriesSelect<true>;
+    'newsletter-recipients': NewsletterRecipientsSelect<false> | NewsletterRecipientsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -89,8 +99,12 @@ export interface Config {
     defaultIDType: string;
   };
   fallbackLocale: null;
-  globals: {};
-  globalsSelect: {};
+  globals: {
+    'site-settings': SiteSetting;
+  };
+  globalsSelect: {
+    'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
+  };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
@@ -138,54 +152,198 @@ export interface Post {
   id: string;
   title: string;
   /**
-   * The public URL is fixed after first publication. Leave blank for a generated draft URL.
+   * Generated for drafts when blank. Fixed after first publication.
    */
-  slug?: string | null;
+  slug: string;
   excerpt?: string | null;
-  body:
-    | {
+  body: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
         [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
   /**
-   * Recovery revision; used to detect concurrent edits.
+   * Native journal revision; prevents stale editor saves.
    */
-  legacyVersion?: number | null;
+  editRevision: number;
   firstPublishedAt?: string | null;
+  mediaReferences?: (string | Media)[] | null;
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
 }
 /**
- * Immutable pre-Payload recovery history. Originals remain in Supabase too.
+ * Private originals. Files become anonymously readable only while used by a published journal post. To replace a file, upload a new original.
  *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "legacy-revisions".
+ * via the `definition` "media".
  */
-export interface LegacyRevision {
+export interface Media {
   id: string;
-  sourceKey: string;
-  postId: string;
-  revision: number;
-  snapshot:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  savedBy: string;
-  savedAt: string;
   /**
-   * Exact original Postgres timestamp, including sub-millisecond precision.
+   * Describe the image for people who cannot see it. Required before publishing images.
    */
-  sourceTimestamp: string;
+  alt?: string | null;
+  caption?: string | null;
+  verified?: boolean | null;
+  sha256?: string | null;
+  uploadIdentity?: string | null;
+  prefix?: string | null;
+  _objectKey?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "videos".
+ */
+export interface Video {
+  id: string;
+  title: string;
+  /**
+   * Generated for drafts when blank. Fixed after first publication.
+   */
+  slug: string;
+  excerpt?: string | null;
+  body?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  cover?: (string | null) | Media;
+  film?: (string | null) | Media;
+  gallery?: (string | Media)[] | null;
+  /**
+   * Frames play in this order.
+   */
+  turntableFrames?: (string | Media)[] | null;
+  credits?: string | null;
+  year?: string | null;
+  editRevision: number;
+  firstPublishedAt?: string | null;
+  mediaReferences?: (string | Media)[] | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "fashion-projects".
+ */
+export interface FashionProject {
+  id: string;
+  title: string;
+  /**
+   * Generated for drafts when blank. Fixed after first publication.
+   */
+  slug: string;
+  excerpt?: string | null;
+  body?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  cover?: (string | null) | Media;
+  film?: (string | null) | Media;
+  gallery?: (string | Media)[] | null;
+  /**
+   * Frames play in this order.
+   */
+  turntableFrames?: (string | Media)[] | null;
+  credits?: string | null;
+  year?: string | null;
+  editRevision: number;
+  firstPublishedAt?: string | null;
+  mediaReferences?: (string | Media)[] | null;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "newsletter-subscribers".
+ */
+export interface NewsletterSubscriber {
+  id: string;
+  email: string;
+  status: 'pending' | 'confirmed' | 'suppressed';
+  confirmationHash?: string | null;
+  confirmationExpiresAt?: string | null;
+  confirmationRequestedAt?: string | null;
+  unsubscribeHash: string;
+  confirmedAt?: string | null;
+  suppressedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "newsletter-deliveries".
+ */
+export interface NewsletterDelivery {
+  id: string;
+  publicationKey: string;
+  post: string | Post;
+  /**
+   * Complete means processing finished, not guaranteed delivery. Inspect recipient outcomes for failures or reconciliation.
+   */
+  status: 'queued' | 'complete' | 'cancelled';
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "newsletter-recipients".
+ */
+export interface NewsletterRecipient {
+  id: string;
+  deliveryKey: string;
+  delivery: string | NewsletterDelivery;
+  subscriber: string | NewsletterSubscriber;
+  status: 'pending' | 'sending' | 'retry' | 'sent' | 'skipped' | 'failed' | 'reconcile';
+  firstAttemptAt?: string | null;
+  claimedAt?: string | null;
+  retryAt?: string | null;
+  claimToken?: string | null;
+  messageHash?: string | null;
+  providerId?: string | null;
+  lastError?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -218,8 +376,20 @@ export interface PayloadLockedDocument {
         value: string | CmsUser;
       } | null)
     | ({
-        relationTo: 'legacy-revisions';
-        value: string | LegacyRevision;
+        relationTo: 'posts';
+        value: string | Post;
+      } | null)
+    | ({
+        relationTo: 'media';
+        value: string | Media;
+      } | null)
+    | ({
+        relationTo: 'videos';
+        value: string | Video;
+      } | null)
+    | ({
+        relationTo: 'fashion-projects';
+        value: string | FashionProject;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -281,24 +451,122 @@ export interface PostsSelect<T extends boolean = true> {
   slug?: T;
   excerpt?: T;
   body?: T;
-  legacyVersion?: T;
+  editRevision?: T;
   firstPublishedAt?: T;
+  mediaReferences?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "legacy-revisions_select".
+ * via the `definition` "media_select".
  */
-export interface LegacyRevisionsSelect<T extends boolean = true> {
-  sourceKey?: T;
-  postId?: T;
-  revision?: T;
-  snapshot?: T;
-  savedBy?: T;
-  savedAt?: T;
-  sourceTimestamp?: T;
+export interface MediaSelect<T extends boolean = true> {
+  alt?: T;
+  caption?: T;
+  verified?: T;
+  sha256?: T;
+  uploadIdentity?: T;
+  prefix?: T;
+  _objectKey?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "videos_select".
+ */
+export interface VideosSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  excerpt?: T;
+  body?: T;
+  cover?: T;
+  film?: T;
+  gallery?: T;
+  turntableFrames?: T;
+  credits?: T;
+  year?: T;
+  editRevision?: T;
+  firstPublishedAt?: T;
+  mediaReferences?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "fashion-projects_select".
+ */
+export interface FashionProjectsSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  excerpt?: T;
+  body?: T;
+  cover?: T;
+  film?: T;
+  gallery?: T;
+  turntableFrames?: T;
+  credits?: T;
+  year?: T;
+  editRevision?: T;
+  firstPublishedAt?: T;
+  mediaReferences?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "newsletter-subscribers_select".
+ */
+export interface NewsletterSubscribersSelect<T extends boolean = true> {
+  email?: T;
+  status?: T;
+  confirmationHash?: T;
+  confirmationExpiresAt?: T;
+  confirmationRequestedAt?: T;
+  unsubscribeHash?: T;
+  confirmedAt?: T;
+  suppressedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "newsletter-deliveries_select".
+ */
+export interface NewsletterDeliveriesSelect<T extends boolean = true> {
+  publicationKey?: T;
+  post?: T;
+  status?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "newsletter-recipients_select".
+ */
+export interface NewsletterRecipientsSelect<T extends boolean = true> {
+  deliveryKey?: T;
+  delivery?: T;
+  subscriber?: T;
+  status?: T;
+  firstAttemptAt?: T;
+  claimedAt?: T;
+  retryAt?: T;
+  claimToken?: T;
+  messageHash?: T;
+  providerId?: T;
+  lastError?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -341,6 +609,147 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings".
+ */
+export interface SiteSetting {
+  id: string;
+  /**
+   * Choose the four section images and the fluid palette. Changes stay private until you publish Site settings.
+   */
+  homepage?: {
+    palette?: {
+      fluidA?: string | null;
+      fluidB?: string | null;
+      background?: string | null;
+    };
+    photography?: {
+      source?: ('none' | 'photograph' | 'media') | null;
+      photographId?: string | null;
+      image?: (string | null) | Media;
+    };
+    journal?: {
+      source?: ('none' | 'photograph' | 'media') | null;
+      photographId?: string | null;
+      image?: (string | null) | Media;
+    };
+    video?: {
+      source?: ('none' | 'photograph' | 'media') | null;
+      photographId?: string | null;
+      image?: (string | null) | Media;
+    };
+    fashion?: {
+      source?: ('none' | 'photograph' | 'media') | null;
+      photographId?: string | null;
+      image?: (string | null) | Media;
+    };
+  };
+  intro?: string | null;
+  contactEmail?: string | null;
+  socialLinks?:
+    | {
+        label: string;
+        url: string;
+        id?: string | null;
+      }[]
+    | null;
+  featuredPhotoId?: string | null;
+  ambientAudio?: (string | null) | Media;
+  colourPhotoIds?:
+    | {
+        photographId: string;
+        id?: string | null;
+      }[]
+    | null;
+  monochromePhotoIds?:
+    | {
+        photographId: string;
+        id?: string | null;
+      }[]
+    | null;
+  newsletterEnabled?: boolean | null;
+  editRevision: number;
+  mediaReferences?: (string | Media)[] | null;
+  _status?: ('draft' | 'published') | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings_select".
+ */
+export interface SiteSettingsSelect<T extends boolean = true> {
+  homepage?:
+    | T
+    | {
+        palette?:
+          | T
+          | {
+              fluidA?: T;
+              fluidB?: T;
+              background?: T;
+            };
+        photography?:
+          | T
+          | {
+              source?: T;
+              photographId?: T;
+              image?: T;
+            };
+        journal?:
+          | T
+          | {
+              source?: T;
+              photographId?: T;
+              image?: T;
+            };
+        video?:
+          | T
+          | {
+              source?: T;
+              photographId?: T;
+              image?: T;
+            };
+        fashion?:
+          | T
+          | {
+              source?: T;
+              photographId?: T;
+              image?: T;
+            };
+      };
+  intro?: T;
+  contactEmail?: T;
+  socialLinks?:
+    | T
+    | {
+        label?: T;
+        url?: T;
+        id?: T;
+      };
+  featuredPhotoId?: T;
+  ambientAudio?: T;
+  colourPhotoIds?:
+    | T
+    | {
+        photographId?: T;
+        id?: T;
+      };
+  monochromePhotoIds?:
+    | T
+    | {
+        photographId?: T;
+        id?: T;
+      };
+  newsletterEnabled?: T;
+  editRevision?: T;
+  mediaReferences?: T;
+  _status?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

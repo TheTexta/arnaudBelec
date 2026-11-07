@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useAnimationFrame, useMotionValue } from "motion/react";
-import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { advanceParticle, containParticle, randomParticlePosition, type CollisionBounds, type Particle } from "./gradient-physics";
 import { orbNoiseAt } from "./orb-noise";
 
@@ -21,6 +21,13 @@ const ORB_COLOUR_RADIUS = (Math.SQRT1_2 + 7.5) / 2;
 const ORB_EDGE_RADIUS = ORB_COLOUR_RADIUS + (7.5 - ORB_COLOUR_RADIUS) * 2.5;
 const ORB_OUTER_EXP_END = Math.exp(-3);
 export const ORB_GRAIN_FRAME_MS = 60;
+const DRAG_THRESHOLD = 6;
+
+function containsPointer(button: HTMLButtonElement, event: PointerEvent<HTMLButtonElement>) {
+  const rect = button.getBoundingClientRect();
+  return Math.hypot(event.clientX - rect.left - rect.width / 2,
+    event.clientY - rect.top - rect.height / 2) <= rect.width / 2;
+}
 
 function drawPixelOrb(canvas: HTMLCanvasElement, hex: string, frame: number, scale: number,
   noiseCellX: number, noiseCellY: number, centreCellX: number, centreCellY: number) {
@@ -59,6 +66,7 @@ function drawPixelOrb(canvas: HTMLCanvasElement, hex: string, frame: number, sca
 }
 
 export function gradientDiameterVw(weight: number, paletteSize: number): number {
+  if (paletteSize <= 1) return 100;
   const equalShare = 1 / paletteSize;
   const difference = Math.max(0, Math.min(1, weight)) - equalShare;
   const scaledDifference = difference < 0
@@ -91,18 +99,22 @@ export function GradientOrb({
   paletteSize,
   isSelected,
   isHovered,
+  stageRef,
   boundsRef,
   positionsRef,
-  onKeyboardSelect,
+  onSelect,
+  onHoverChange,
   onPositionChange,
 }: {
   colour: GradientOrbColour;
   paletteSize: number;
   isSelected: boolean;
   isHovered: boolean;
+  stageRef: { current: HTMLElement | null };
   boundsRef: { current: MeasuredBounds | null };
   positionsRef: { current: Record<string, { x: number; y: number }> };
-  onKeyboardSelect: () => void;
+  onSelect: () => void;
+  onHoverChange: (hovered: boolean) => void;
   onPositionChange?: (id: string, x: number, y: number) => void;
 }) {
   const offsetX = useMotionValue(0);
@@ -115,6 +127,42 @@ export function GradientOrb({
   const particleRef = useRef<Particle>({ x: 0, y: 0, vx: colour.vx, vy: colour.vy });
   const previousBoundsRef = useRef<MeasuredBounds | null>(null);
   const reducedMotionRef = useRef(false);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number;
+    offsetX: number; offsetY: number; moved: boolean } | null>(null);
+  const [isHeld, setIsHeld] = useState(false);
+
+  const publishPosition = useCallback(() => {
+    const particle = particleRef.current;
+    offsetX.set(particle.x);
+    offsetY.set(particle.y);
+    onPositionChange?.(colour.id, particle.x, particle.y);
+  }, [colour.id, offsetX, offsetY, onPositionChange]);
+
+  const movePointer = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    const bounds = boundsRef.current;
+    const stage = stageRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !bounds || !stage) return;
+    if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < DRAG_THRESHOLD) return;
+    drag.moved = true;
+    const rect = stage.getBoundingClientRect();
+    const particle = particleRef.current;
+    particle.x = event.clientX - rect.left - drag.offsetX;
+    particle.y = event.clientY - rect.top - drag.offsetY;
+    containParticle(particle, bounds);
+    publishPosition();
+  };
+
+  const endPointer = (event: PointerEvent<HTMLButtonElement>, cancelled = false) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!cancelled) movePointer(event);
+    dragRef.current = null;
+    setIsHeld(false);
+    onHoverChange(!cancelled && event.pointerType !== "touch" && containsPointer(event.currentTarget, event));
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!cancelled && !drag.moved && containsPointer(event.currentTarget, event)) onSelect();
+  };
 
   useEffect(() => {
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -155,10 +203,8 @@ export function GradientOrb({
       previousBoundsRef.current = bounds;
     }
 
-    if (!reducedMotionRef.current) advanceParticle(particle, bounds, delta);
-    offsetX.set(particle.x);
-    offsetY.set(particle.y);
-    onPositionChange?.(colour.id, particle.x, particle.y);
+    if (!reducedMotionRef.current && !dragRef.current) advanceParticle(particle, bounds, delta);
+    publishPosition();
     spawnOpacity.set(1);
 
     const canvas = canvasRef.current;
@@ -184,11 +230,12 @@ export function GradientOrb({
       drawPixelOrb(canvas, colour.hex, frame, scale, noiseCellX, noiseCellY, centreCellX, centreCellY);
       lastGrainRef.current = { hex: colour.hex, frame, scale, noiseCellX, noiseCellY, centreCellX, centreCellY };
     }
-  }, [boundsRef, colour.hex, colour.id, colour.weight, isSelected, offsetX, offsetY, onPositionChange, paletteSize, positionsRef, spawnOpacity]);
+  }, [boundsRef, colour.hex, colour.id, colour.weight, isSelected, paletteSize, positionsRef, publishPosition, spawnOpacity]);
 
   useAnimationFrame(updatePosition);
 
   const diameterVw = gradientDiameterVw(colour.weight, paletteSize);
+  const targetSize = Math.max(44, 64 * diameterVw / 100 * (isSelected ? 1.5 : 1));
 
   return (
     <motion.div
@@ -196,15 +243,33 @@ export function GradientOrb({
       style={{ x: offsetX, y: offsetY, opacity: spawnOpacity }}
     >
       <button
-        className="group pointer-events-auto relative grid aspect-square -translate-x-1/2 -translate-y-1/2 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 transition-[width] duration-[700ms] focus-visible:outline-none motion-reduce:transition-none [-webkit-tap-highlight-color:transparent]"
-        style={{ width: `${diameterVw}vw`, "--orb-focus-size": `${64 * diameterVw / 100 * (isSelected ? 1.5 : 1)}px` } as CSSProperties}
+        className="group pointer-events-auto relative grid aspect-square -translate-x-1/2 -translate-y-1/2 touch-none select-none place-items-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-none [-webkit-tap-highlight-color:transparent]"
+        style={{ width: targetSize, cursor: isHeld ? "grabbing" : "grab", "--orb-focus-size": `${targetSize}px` } as CSSProperties}
         type="button"
         data-colour-orb={colour.id}
         data-hovered={isHovered}
+        data-dragging={isHeld}
         aria-label={`Show ${colour.name} photographs`}
         aria-pressed={isSelected}
+        onPointerEnter={(event) => { if (event.pointerType !== "touch") onHoverChange(true); }}
+        onPointerLeave={() => { if (!dragRef.current) onHoverChange(false); }}
+        onPointerDown={(event) => {
+          if (!event.isPrimary || event.button !== 0 || dragRef.current || !boundsRef.current || !stageRef.current) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+            offsetX: event.clientX - rect.left - rect.width / 2,
+            offsetY: event.clientY - rect.top - rect.height / 2, moved: false };
+          setIsHeld(true);
+          onHoverChange(true);
+        }}
+        onPointerMove={movePointer}
+        onPointerUp={(event) => endPointer(event)}
+        onPointerCancel={(event) => endPointer(event, true)}
+        onLostPointerCapture={(event) => endPointer(event, true)}
         onClick={(event) => {
-          if (event.detail === 0) onKeyboardSelect();
+          // Pointer selection happens on release, only when no drag occurred.
+          if (event.detail === 0) onSelect();
         }}
       >
         <canvas
@@ -213,7 +278,7 @@ export function GradientOrb({
           height={ORB_PIXELS}
           aria-hidden="true"
           className="pixel-orb pointer-events-none absolute top-1/2 left-1/2 size-64 -translate-x-1/2 -translate-y-1/2"
-          data-active={isSelected || isHovered}
+          data-active={isSelected || isHovered || isHeld}
           style={{ "--orb-colour": colour.hex } as CSSProperties}
         />
       </button>

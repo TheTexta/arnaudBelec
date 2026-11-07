@@ -2,6 +2,22 @@
 
 ## Status and ownership
 
+**Portfolio intake (2026-11-06):** eight new public photographs were imported
+through the still-deployed Supabase upload provider and legacy seven-colour/96px
+analyser. The catalogue now has 16 photographs: the prior eight deliver from R2,
+and the new eight from Supabase. No provider flag, existing palette, original or
+MMCQ migration changed. Another 19 project images used verified private native
+Media in `arnaudbelec-staging/journal-native/`; they are attached to private drafts,
+not public promotions. No video master was uploaded. See
+[`portfolio-intake-20261106.md`](portfolio-intake-20261106.md).
+
+**Palette-only source update (2026-11-05; not deployed):** the MMCQ adaptation and
+256px/legacy-96px sample compatibility are documented in
+[`palette-extraction.md`](palette-extraction.md). References below to unchanged
+seven-colour/96px analysis describe the storage-rollout checkpoint, not the new
+pending palette release. Storage providers, reservations and original bytes are
+unchanged; this does not enable R2 photograph uploads or authorize a backfill.
+
 The owner approved the Arnaud rollout, including production changes, on
 2026-10-15 (UTC). Application/SQL/Worker deployment and the eight-photo catalogue
 cutover are complete. Admin configuration and authenticated R2 app uploads were

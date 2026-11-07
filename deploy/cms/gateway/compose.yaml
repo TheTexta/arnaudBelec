@@ -1,0 +1,43 @@
+services:
+  arnaud-cms-pooler:
+    image: dextery/arnaud-cms-pgbouncer@sha256:b2c281655e1bd72de4b5c12f53ebc036bc58edad1d1a9405663c052a72ee313a
+    pull_policy: never
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    volumes:
+      - /home/dextery/.local/share/arnaud-cms-gateway:/etc/pgbouncer:ro
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    networks: [supabase]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: qvorfovjsiinni7o8azmlluz
+      traefik.tcp.routers.arnaud-cms-db.entrypoints: https
+      traefik.tcp.routers.arnaud-cms-db.rule: HostSNI(`arnaud-cms-db.dextery.dev`)
+      traefik.tcp.routers.arnaud-cms-db.service: arnaud-cms-db
+      traefik.tcp.routers.arnaud-cms-db.tls: "true"
+      traefik.tcp.routers.arnaud-cms-db.tls.certresolver: letsencrypt
+      traefik.tcp.services.arnaud-cms-db.loadbalancer.server.port: "6432"
+      traefik.tcp.routers.arnaud-cms-db.middlewares: arnaud-cms-connections
+      traefik.tcp.middlewares.arnaud-cms-connections.inflightconn.amount: "30"
+    healthcheck:
+      test: [CMD-SHELL, "test -r /etc/pgbouncer/users.txt && kill -0 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+
+networks:
+  supabase:
+    external: true
+    name: qvorfovjsiinni7o8azmlluz

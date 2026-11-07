@@ -1,30 +1,30 @@
 import { cache } from "react";
-import { publicBlogClient } from "./server";
-import { validateBody, type BlogDocument } from "./document";
+import { getCms } from "../cms/client";
+import { cmsEnabled } from "../cms/session";
+import type { Post } from "@/payload-types";
 
-export type PublishedPost = BlogDocument & { id: string; published_at: string; updated_at: string; source_version: number };
-export type PostSummary = Omit<PublishedPost, "body">;
+export type PublishedPost = Post;
+export type PostSummary = Pick<Post, "id" | "title" | "slug" | "excerpt" | "firstPublishedAt" | "updatedAt">;
 
 export async function publishedPosts(page: number): Promise<{ posts: PostSummary[]; more: boolean }> {
-  const client = publicBlogClient();
-  if (!client) return { posts: [], more: false };
-  const start = (page - 1) * 20;
-  const { data, error } = await client.from("arnaud_blog_publications").select("id,title,slug,excerpt,published_at,updated_at,source_version").order("published_at", { ascending: false }).order("id").range(start, start + 20);
-  if (error) {
-    if (["42P01", "PGRST205"].includes(error.code)) return { posts: [], more: false };
-    throw new Error("The journal could not be loaded.");
-  }
-  return { posts: (data ?? []).slice(0, 20) as PostSummary[], more: (data?.length ?? 0) > 20 };
+  if (!cmsEnabled()) return { posts: [], more: false };
+  const cms = await getCms();
+  const result = await cms.find({
+    collection: "posts", draft: false, overrideAccess: false, user: null,
+    where: { _status: { equals: "published" } }, sort: "-firstPublishedAt,-id",
+    page, limit: 20, depth: 0,
+    select: { title: true, slug: true, excerpt: true, firstPublishedAt: true, updatedAt: true },
+  });
+  return { posts: result.docs, more: result.hasNextPage };
 }
 
 export const publishedPost = cache(async (slug: string): Promise<PublishedPost | null> => {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 100) return null;
-  const client = publicBlogClient();
-  if (!client) return null;
-  const { data, error } = await client.from("arnaud_blog_publications").select("*").eq("slug", slug).maybeSingle();
-  if (error) {
-    if (["42P01", "PGRST205"].includes(error.code)) return null;
-    throw new Error("The post could not be loaded.");
-  }
-  return data ? { ...data, body: validateBody(data.body) } as PublishedPost : null;
+  if (!cmsEnabled() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 100) return null;
+  const cms = await getCms();
+  const result = await cms.find({
+    collection: "posts", draft: false, overrideAccess: false, user: null,
+    where: { and: [{ slug: { equals: slug } }, { _status: { equals: "published" } }] },
+    limit: 1, depth: 1,
+  });
+  return result.docs[0] ?? null;
 });

@@ -1,12 +1,36 @@
 # Payload + BlockNote: implementation and cutover
 
+> **Historical rollout record, not the current implementation guide.** The native
+> Lexical/Media replacement is implemented locally; see
+> [native-payload-journal.md](native-payload-journal.md). It has not been deployed,
+> and the complete journal reset/native migration/legacy retirement have not run
+> against production. BlockNote, import and legacy recovery commands below describe
+> the old release only; do not rerun them or use its rollback instructions after
+> the separately approved reset. Existing private receipts remain historical evidence.
+
 ## Status and scope
 
-Implemented and locally verified on 2026-10-31. The owner subsequently approved
-committing and deploying the source with Payload **disabled**. Production CMS
-activation, database migration/import and network changes remain separately gated.
-Native administration is staged at `/cms`, gated by `ARNAUD_CMS_ENABLED=true`.
-The deployed custom `/admin` remains the rollback implementation.
+**Production CMS activated on 2026-11-02** at `/cms`, using reviewed runtime commit
+`24ca88f` (following `2ba6a67`) with production-only configuration. Deployment:
+`dpl_9iC5rcVkae5CbkE2W6LQLccaLdz5`, canonical site
+`https://arnaud-belec.vercel.app`. Unrelated photograph working-tree edits were
+excluded; application runtime source was not redesigned for cutover.
+The later upload callback correction was deployed as
+`dpl_AgCosETdDYaox6J2nKJtjFcrVcSG`. The current initial-draft/publication-feedback
+release is `dpl_J9SVWJQ25d3P5JHbZdiZs1VsMYH6`; both scopes are recorded below.
+
+The owner approved migration and **Option 1**: Vercel website/CMS plus a restricted
+TLS gateway to existing Coolify PostgreSQL. They later explicitly continued with
+an Arnaud-only backup/restore instead of requiring a complete shared-Supabase
+restore rehearsal. The scoped native restore passed; full shared disaster recovery
+remains unverified, not a blocker silently reintroduced here.
+
+Two drafts, 11 exact legacy revisions and three private media records were
+preserved. Nothing was published/deleted. `/admin` now routes to native `/cms`;
+`ARNAUD_CMS_ENABLED=false` and the previous guarded deployment remain rollback.
+Existing Supabase identity/allowlist, photograph tools/provider and R2 credentials
+are unchanged. Final real signed-in CMS/media acceptance remains a human check;
+anonymous/security and database checks passed.
 
 - Payload 3.92.1, Next 16.4.3, React 19.3, BlockNote 0.57.
 - Node `.nvmrc` is 24.22.1; supported range `^22.23.4 || >=24.22.1`.
@@ -136,22 +160,37 @@ history remains available after rollback. Do not silently renumber it into nativ
 version IDs. Compare report hashes before/after import and verify each public URL,
 published date/body, UUID media URL, current draft and exact historical snapshot.
 
-## Proposed production changes — approval required
+`tsx scripts/cms/verify-import.ts` independently reads back complete drafts,
+historical snapshots/authors/exact timestamps and publication bodies, with full
+media/publication-media metadata in its digest. Use it during the frozen initial
+import, not as a requirement that immutable imported history grow with later native
+edits. Its output contains counts/hash only; errors never print private documents.
 
-Source-code deployment with Payload disabled was approved on 2026-10-31. There
-are **no approved production CMS activation/database/network changes**. Before
-cutover, confirm the production database target/backup and approved network path,
-then approve the following concrete change set and activation separately:
+## Cutover procedure and verification requirements
+
+Source deployment with Payload disabled, CMS migration and Option 1 were approved
+in that order. The steps below were completed on 2026-11-02; they remain the
+requirements for future reviewed cutovers, not instructions to rerun role creation
+or overwrite the now-nonempty import target. Both shared-extension audits passed
+against **three real CMS roles**, not just synthetic or absent identities.
 
 1. **Connectivity gate:** Payload needs a native Postgres connection from its
    server runtime. Current public Supabase HTTP API access is not sufficient.
-   No Vercel-to-Postgres TLS endpoint/private connector has been verified. Do not
-   expose port 5432, change Tailscale, firewall/DNS or bypass private networking.
-   Select and approve a secure deployment/database connection path first.
-2. **Back up/freeze:** capture a recoverable database backup and baseline counts/
-   hashes; temporarily stop journal edits during final import. Photographs/media
-   remain untouched. Do not use this cutover to retire sources or rotate shared
-   credentials.
+   The verified endpoint is runtime-only PgBouncer behind exact-host STARTTLS on
+   existing proxy port 443; PostgreSQL stays unpublished. See
+   `deploy/cms/gateway/README.md` for pinned source/config and acceptance. Do not change
+   Tailscale, expose 5432/6543, or add router/firewall/public-port changes as a
+   workaround. Confirm the dedicated hostname and test verified TLS before use.
+2. **Back up/freeze:** capture a recoverable Arnaud journal backup and baseline
+   counts/full-row hashes; temporarily stop journal edits during final import.
+   `scripts/cms/backup-native.py --confirm-production-read --output <new-private-dir>`
+   backs up and restores the five journal tables against the authoritative schema
+   on network-isolated native PostgreSQL, requiring full-row equivalence. The owner
+   explicitly waived a complete shared-Supabase restore rehearsal for this cutover.
+   `deploy/cms/pause-journal.sql` briefly removes only the legacy journal writer's
+   mutations; capture exact service-role ACLs and prepare their resume first.
+   Photographs/media remain untouched. Do not use this cutover to retire sources
+   or rotate shared credentials.
 3. **Roles:** database owner applies `deploy/cms/roles.sql` once. It creates only
    `arnaud_cms_owner`, `arnaud_cms_migrator`, `arnaud_cms_runtime`, the isolated
    schema, Arnaud-only legacy grants/RLS policies and default privileges for both
@@ -163,7 +202,9 @@ then approve the following concrete change set and activation separately:
    `20261031_202034_history_precision`). The schema is already provisioned by the
    role script; the migrator needs no database-level CREATE permission. Prefer
    `SET ROLE arnaud_cms_owner` for ownership. Default privileges also cover objects
-   created directly by the migrator. Verify runtime CRUD and anonymous denial.
+   created directly by the migrator. Set the owner role through connection startup
+   `options=-c role=arnaud_cms_owner` for every migrator pool client; a separate psql
+   SET ROLE cannot affect the CLI's connections. Verify runtime CRUD and denial.
 5. **Import:** report, inspect counts/hash, apply into the empty target, re-report,
    verify all invariants above. No R2 object copy, cleanup or deletion occurs.
 6. **Vercel configuration:** use supported Node 24.x. Add server-only
@@ -181,10 +222,247 @@ then approve the following concrete change set and activation separately:
    unchanged photographs. Keep clearly labeled acceptance content private unless
    publication of that exact fixture is separately approved.
 
-Database pool maximum is three per application instance. Payload 3.92.1 reserves
-one startup client; size the approved pooler/connection budget across Vercel
-instances. Native Postgres concurrency, latency/timeouts and production network
-acceptance remain explicit gates, not conclusions from PGlite.
+Database pool maximum is three per application instance; Payload 3.92.1 reserves
+one startup client. The gateway caps ordinary backend sessions at six and clients
+at 30 across the single instance. Native concurrent-writer conflict/rollback and
+public verified-TLS/prepared-query tests passed; they are not PGlite conclusions.
+
+### Option 1 preflight and shared-permission repairs
+
+Read-only inspection after the owner's selection established:
+
+- Tailscale/SSH reaches the healthy existing PostgreSQL and Supavisor containers.
+  Neither publishes a host database port. The host is behind a LAN router.
+- Existing Coolify Traefik is 3.7.16, already publishes port 443 and supports
+  PostgreSQL STARTTLS with exact `HostSNI` routing and automatic certificates.
+  Existing API-host TLS chain/hostname validation passed. This is **not** proof
+  of a working CMS database endpoint. No existing Docker-label TCP router was
+  found; shared HTTPS compatibility still requires regression checks.
+- The dedicated PgBouncer now uses that existing ingress without another router
+  port, at `arnaud-cms-db.dextery.dev` (DNS-only CNAME to existing API origin).
+  Only the runtime login is accepted publicly; migration access stays over
+  Tailscale. Require real node-pg certificate/hostname verification (`verify-full`),
+  including negative TLS/plaintext, SNI, username and database-routing tests.
+- PostgreSQL has a 100-connection limit; 69 connections were observed across the
+  cluster. Start with at most **six aggregate runtime backend connections**,
+  accounting for reserve pools and direct/migration clients; do not increase the
+  shared server limit. Native and gateway transaction/prepared-query checks passed.
+- Before cutover no `arnaud_cms` schema or roles existed. Baseline: two posts,
+  11 revisions, three media records and zero publications. No content was read,
+  published or deleted during inspection. Recheck counts/hash at cutover.
+- Complete shared-Supabase recovery remains unverified; its generic restore hit
+  extension-bootstrap dependencies. The owner explicitly continued with a scoped
+  Arnaud journal backup/restore instead, which passed full-row native equivalence.
+  Do not stop/recreate shared Supabase or equate its volume with a verified backup.
+
+**Separately approved repair: inherited shared privileges.** Catalog inspection
+found `PUBLIC USAGE` on schema `net` and `PUBLIC` table privileges (including
+SELECT, writes and TRUNCATE) on `net.http_request_queue` and `net._http_response`.
+Both are pg_net extension tables, owned by `supabase_admin`, with RLS disabled.
+Before the repair, every new CMS identity would inherit these permissions even with the explicit
+Arnaud-only grants in `deploy/cms/roles.sql`. PostgreSQL has no per-role DENY that
+subtracts `PUBLIC` access. This was an effective-isolation blocker, not evidence
+of exploitation or of those tables' contents.
+
+Independent read-only security review agreed that gateway activation must wait.
+The owner subsequently approved a targeted hardening operation owned by
+`dextery-infrastructure`: inventory role/
+function/default-ACL dependencies, preserve verified existing Supabase/project
+access with explicit grants, remove the proven inherited exposure, test all CMS
+identities and existing consumers, and retain a reversible grant record. Merely
+restricting the PgBouncer username or granting only Arnaud tables is insufficient.
+This approval covers only the targeted shared pg_net permission fix and its
+backup/tests, not unrelated grant changes or shared membership rollout. Its
+manual SQL, isolated tests and execution record are owned by
+`../dextery-infrastructure/postgres/pg-net/README.md`. Native permission-snapshot
+recovery, old-role preservation, new-role denial and rollback tests passed on
+2026-11-01. Complete content restore is still blocked by Supabase extension-
+bootstrap dependencies; the retained full dump is **not** restore-verified.
+On 2026-11-02 the owner explicitly accepted the narrower, verified permission-
+recovery gate and approved applying only the permission fix. The exact tested
+`harden.sql` committed successfully; an independent post-commit audit confirmed
+zero PUBLIC pg_net ACL entries and preserved access for all 29 existing roles.
+Snapshots confirmed unrelated/default grants, database ownership, memberships and
+net routine definitions unchanged. Shared services and public-project smoke checks
+passed; at that permission-only checkpoint `/cms` returned 404 and anonymous admin
+session access returned 401.
+
+That permission-only checkpoint did not activate CMS. The owner subsequently
+continued the migration without the full shared-restore gate. Actual role auditing
+then found eight PUBLIC-executable pgsodium SECURITY DEFINER functions; the owner
+explicitly approved the same preserve-existing-access repair. Native tests and
+independent review passed before applying only those eight EXECUTE changes.
+All 29 old roles retained access; function definitions, memberships, other grants,
+keys and extension state were unchanged. No crypto/key function was invoked.
+Both infrastructure audits then passed against all three real CMS roles.
+See `../dextery-infrastructure/postgres/pgsodium/OPERATIONS.md` for exact source,
+native recovery proof, applied hashes and maintenance caveats.
+
+## Production cutover record — 2026-11-02
+
+- Fresh journal-only native restore passed for two posts, 11 revisions, three
+  private media records and zero publications/publication-media rows. Full source
+  rows SHA-256: `ff086c9a4c03410fcd410dae476c6386a3293d50667a6553f843f981c57c72cd`.
+  No Auth credentials, Vault/GraphQL state or unrelated-site data were needed.
+- Native PostgreSQL rehearsal passed real owner/migrator login identity, both
+  migrations with consistent ownership, restricted-runtime report/apply/readback,
+  exact historical timestamps, duplicate-import refusal, concurrent writer
+  conflict/rollback, anonymous/DDL denial and fixture-only publish/unpublish.
+- Created three independent CMS database roles and owner-owned schema; applied
+  both checked-in migrations. No shared service role or Auth identity was created
+  or implicitly granted CMS access. Existing photograph tables/provider are intact.
+- Built verified PgBouncer 1.26.1; deployed the single pinned Coolify gateway on
+  existing 443, without publishing PostgreSQL. All 13 transport/authorization
+  groups passed, including wrong password/user/database/console, plaintext,
+  hostname/CA/SNI rejection and 24 prepared queries within the backend budget.
+- Temporarily paused only legacy journal mutations, capturing its exact ACLs.
+  Imported through verified public TLS as runtime, then independently read back
+  every draft and legacy revision plus full media metadata. Legacy source rows
+  matched the backup before and after import and again after activation. Import
+  report hash: `cdb4b2f98246d8d399fad29cb7482211a4b73c502d1ca64a2ad2e31659352534`.
+- Added only four production CMS configuration keys in Vercel (URL/secret sensitive,
+  exact origin and enabled flag). Other variables, previews and R2 credentials
+  were unchanged. Clean runtime source from `24ca88f` passed enabled build, source
+  hashes and client-secret scan. No unrelated photograph edits were deployed.
+- Deployment `dpl_9iC5rcVkae5CbkE2W6LQLccaLdz5` is READY at the canonical site.
+  Exact pre-cutover service-role journal ACLs were restored, lifting the write pause.
+  The prior disabled deployment `dpl_GzDY1dwSV2dT362BGxAHkpdcfeTK` remains rollback.
+- Browser `/cms` reaches the Supabase sign-in page; anonymous me/drafts/history/
+  versions are denied, registration remains unavailable, cross-origin writes are
+  denied, and all three private media URLs remain 404 anonymously. Photography
+  image decode and public Arnaud/Elliot/bur1alrites/portfolio pages passed. Vercel
+  reported no CMS-route runtime errors in the checked post-deploy window.
+- No production content was published/deleted and no media was copied or retired.
+  Real signed-in session rotation, editing/uploads/private preview via the live
+  CMS, and maximum-size media still require human acceptance. Existing legacy
+  real-upload evidence is not silently reclassified as new CMS acceptance.
+
+### Retained receipts and backup
+
+Private cutover snapshots, import/readback results, ACL evidence and the released
+source archive remain under ignored `.local/cms-migration-20261102/` (directory
+0700, sensitive files 0600). They must not be committed or printed. The restart
+cleared the original temporary fixture/release directories; those paths are
+historical, not durable evidence storage. `activation-source.tar` still matches
+the complete recorded release-source hash manifest.
+
+A fresh journal-only backup was therefore restored and verified again on
+2026-11-02 into a disposable network-isolated native PostgreSQL instance. Its
+dump, full-row snapshots and manifest are retained in
+`.local/cms-migration-20261102/journal-backup-final/`. All source rows still matched
+the cutover hash above; counts remained two posts, 11 revisions, three media
+records and zero publications. The owned fixture was removed without cleanup
+errors. No production writes, import, write pause or deployment were repeated.
+This is a local five-table journal recovery artifact, not an offsite backup,
+native CMS-version archive, media-byte backup or shared-Supabase recovery claim.
+
+## New-post media callback fix — deployed 2026-11-02
+
+A browser regression reproduced media uploads retaining the unsaved post ID after
+the initial draft save. BlockNote creates its editor once, so passing replacement
+upload/preview callbacks as options did not update that editor. The shared editor
+now forwards both callbacks through a current ref without recreating its document
+or losing unsaved writing. Attempts before a draft ID exists also report the
+save-and-retry instruction in the field's live status rather than only throwing.
+
+`scripts/cms/verify-editor-browser.mjs` exercises the actual editor and file picker
+in a loopback-only synthetic page: mount without an ID, write, assign a saved draft
+ID, upload an image, resolve/decode it, and verify writing is retained. It passed
+at 1280px and 390px; before the fix the upload callback still received no post ID.
+It uses the installed esbuild dependency and a local Playwright installation
+(`PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs` when needed). It does
+not connect to Payload, Supabase or R2 and is not real production-upload acceptance.
+Run with `node scripts/cms/verify-editor-browser.mjs` after dependency setup.
+
+The owner explicitly approved deploying the two application-file corrections.
+Release `dpl_AgCosETdDYaox6J2nKJtjFcrVcSG` is READY and aliased to
+`https://arnaud-belec.vercel.app`. Its reviewed base is the retained `24ca88f`
+source archive with only `app/admin/posts/block-editor.tsx` and
+`components/cms/BlockNoteField.tsx` replaced. Unrelated photograph edits were
+excluded. Source-manifest SHA-256:
+`3bbc91140258dbacb6819fb841fe80cf6a8cc7a608208b24c8dab2732cbd397e`.
+
+Lint, typecheck, 10 CMS tests, 23 journal tests, desktop/mobile browser regression,
+the local production compilation and Vercel's independent build passed. Live
+home/journal/login returned 200; anonymous CMS me returned 401 and posts/history/
+versions returned 403. No runtime errors were reported in the checked deployment
+window. These checks do not replace a signed-in real R2 upload retry.
+
+This was an application-only correction. No Supabase/R2/database/auth/CORS setting
+changed, and no production content was created, published or deleted. The previous
+CMS-enabled deployment `dpl_9iC5rcVkae5CbkE2W6LQLccaLdz5` remains the immediate
+application rollback. Private source/hash receipts are retained in ignored
+`.local/cms-upload-fix-release.json` and `.local/cms-upload-repro/`. No new Git
+commit or push was made. This first correction still required an initial manual
+save; the follow-up below addresses uploads before that first save.
+
+## Initial-draft and publication feedback follow-up — deployed 2026-11-02
+
+The previous isolated editor regression simulated a saved ID; it did not exercise
+Payload's full create screen. Full CMS browser reproduction confirmed that native
+autosave only updates existing posts and does not create the first draft. A new
+post therefore had no identity for media preparation until a manual save.
+
+The body field now prepares one private draft through Payload's native form
+submission when the author opens New post, using both `draft=true` and
+`_status=draft`. The editor is enabled only after native creation updates the
+identity/edit URL. A guarded initial attempt prevents duplicate submissions;
+failure offers an explicit retry instead of repeatedly creating drafts. This
+preserves native form state, recovery versions, auth and transactional legacy
+synchronization without a second content-creation API or implicit publication.
+
+Custom media transfers now set Payload's upload status, preventing Publish while
+bytes are still transferring/verifying, and report completion instead of leaving
+the last “Verifying…” message onscreen. Publication content requirements (including
+finished media and descriptive photograph captions) return a 400 body validation
+error with a visible inline instruction instead of a generic 500. The requirements
+and rollback behavior are unchanged; this is not permission to bypass them.
+
+Full local lifecycle regression (two terminals, Node 24.22.1):
+
+```sh
+npx tsx scripts/cms/post-lifecycle-fixture.ts
+# After the local Next server is ready, in another terminal:
+node scripts/cms/verify-post-lifecycle-browser.mjs
+```
+
+The fixture owns loopback ports 3107/55440/55443, starts Next with a memory-only
+PGlite database and synthetic Auth, and overrides real API/storage credentials.
+Stop it with Ctrl+C afterward. The browser check requires local Playwright (set
+`PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs` if installed elsewhere),
+refuses a non-fixture state endpoint and blocks non-local browser requests. Media
+transfer is mocked; native creation/autosave/publication use the real local CMS.
+Optional `CMS_LIFECYCLE_EVIDENCE=.local/cms-post-lifecycle-check` retains captures
+and a non-secret result receipt outside source control.
+
+Passed at 1280px and 390px: zero manual Save clicks before first upload, one private
+draft per create-screen visit, disabled Publish during transfer, completed-upload
+feedback, visible missing-caption validation and unchanged saved state after a
+rejected publication. Explicit retry after an initial create failure and real
+local text publication after autosave also passed. No production content was
+created/published/deleted, and no real R2 transfer/promotion was exercised.
+
+The owner explicitly approved deploying the follow-up. Release
+`dpl_J9SVWJQ25d3P5JHbZdiZs1VsMYH6` is READY and aliased to the canonical site.
+Relative to the preceding deployed source, only `components/cms/BlockNoteField.tsx`
+and `lib/cms/posts.ts` changed. Source-manifest SHA-256:
+`ab1e9a13fda91262a254c307e463a77a784f3c2277546cfec4b999415b986cc6`.
+The prior callback fix remains included; unrelated photograph edits were excluded.
+
+Lint, typecheck, 11 CMS tests, 23 journal tests, full local CMS desktop/mobile
+lifecycle regression, production compilation, disabled-CMS runtime checks and
+Vercel's build passed. After deployment, home/journal/login returned 200, anonymous
+CMS me returned 401 and posts/history/versions returned 403. No errors were
+reported in the checked deployment runtime window. All owned local fixture
+processes/ports were closed. No database, Supabase, R2, Auth or CORS configuration
+changed; no operator production content writes were made.
+
+Private release/hash evidence is retained in `.local/cms-initial-draft-release.json`
+and full fixture captures/results in `.local/cms-post-lifecycle-check/`. A live
+signed-in R2 upload and media publication still need the author's retry; the
+fixture result is not real storage acceptance. Reload existing CMS tabs to receive
+the new create flow. Immediate application rollback is the preceding
+`dpl_AgCosETdDYaox6J2nKJtjFcrVcSG`; it does not require a schema/ACL reversal.
 
 ## Rollback (non-destructive)
 

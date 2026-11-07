@@ -1,11 +1,17 @@
-import PhotoPage from "@/app/photo-page";
+import type { Metadata } from "next";
+import { HomeEntrance } from "@/components/site/HomeEntrance";
+import { getPublicSiteSettings } from "@/lib/site/public";
 import { loadPublicPhotographs } from "@/lib/supabase-public";
 
-// Keep the catalogue current when photographs are added outside a site deploy.
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  const photographs = await loadPublicPhotographs();
+export const metadata: Metadata = {
+  title: "Arnaud Belec",
+  description: "Photographs, films, fashion and writing by Arnaud Belec.",
+  alternates: { canonical: "/" },
+};
 
-  return <PhotoPage photographs={photographs} />;
+export default async function Page() {
+  const [photographs, settings] = await Promise.all([loadPublicPhotographs(), getPublicSiteSettings()]);
+  return <HomeEntrance photographs={photographs} settings={settings} />;
 }

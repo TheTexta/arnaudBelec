@@ -7,6 +7,7 @@ import { cmsEnabled, assertOrigin } from "@/lib/cms/session";
 import { importMap } from "./cms/importMap";
 import { nonPhotoFonts } from "@/app/non-photo-fonts";
 import "@payloadcms/next/css";
+import "@/app/site-font.css";
 import "@/components/cms/cms.css";
 import type { Viewport } from "next";
 
@@ -21,5 +22,5 @@ const serverFunction: ServerFunctionClient = async args => {
 
 export default function CmsLayout({ children }: { children: React.ReactNode }) {
   if (!cmsEnabled()) notFound();
-  return <RootLayout config={config} importMap={importMap} serverFunction={serverFunction} htmlProps={{ className: nonPhotoFonts }}>{children}</RootLayout>;
+  return <RootLayout config={config} importMap={importMap} serverFunction={serverFunction} htmlProps={{ className: `${nonPhotoFonts} cms-admin` }}>{children}</RootLayout>;
 }

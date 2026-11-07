@@ -1,6 +1,7 @@
 import config from "@payload-config";
 import { REST_GET, REST_POST, REST_PATCH, REST_DELETE, REST_OPTIONS } from "@payloadcms/next/routes";
 import { cmsEnabled } from "@/lib/cms/session";
+import { privateRestoreRequest } from "@/lib/cms/restore";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -11,7 +12,15 @@ const guard = (handler: Handler): Handler => async (request, context) => {
   // Supabase alone owns authentication. Explicit bridge routes handle me,
   // refresh and logout; no Payload login/bootstrap/reset/API-key route is exposed.
   if (slug?.[0] === "cms-users" && slug.length > 1 && !/^[0-9a-f-]{36}$/.test(slug[1])) return new Response(null, { status: 404 });
-  return handler(request, context);
+  request = privateRestoreRequest(request, slug);
+  const response = await handler(request, context);
+  // The S3 adapter's signed-download branch bypasses upload response headers.
+  // Never cache a capability redirect across publication or session changes.
+  if (slug?.[0] === "media") {
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.append("Vary", "Cookie, Authorization");
+  }
+  return response;
 };
 export const GET = guard(REST_GET(config));
 export const POST = guard(REST_POST(config));

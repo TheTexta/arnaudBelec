@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useAnimationFrame } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { BloomLayer, type OrbPositions } from "@/app/bloom-layer";
 import { GradientOrb, type GradientOrbColour, type MeasuredBounds } from "@/app/gradient-orb";
 import { findSimilarPhotographs } from "@/lib/photographs/similar-colours";
 import { foregroundForBackground } from "@/lib/photographs/page-colours";
+import { imagePlaceholder } from "@/lib/photographs/image-placeholder";
+import { playColourChord } from "@/lib/audio/colour-chords";
 import type { PublicPhotograph } from "@/lib/supabase-public";
 
 const PAGE_SIZE = 36;
@@ -20,35 +21,6 @@ const gradientSlots = [
   { id: "5", name: "palette colour 6", vx: 6.5, vy: 5 },
   { id: "6", name: "palette colour 7", vx: -7.5, vy: 6 },
 ] as const;
-
-function closestGradientAt(
-  stage: HTMLElement,
-  photo: HTMLElement | null,
-  pointerX: number,
-  pointerY: number,
-): number | null {
-  if (photo) {
-    const rect = photo.getBoundingClientRect();
-    if (pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom) {
-      return null;
-    }
-  }
-
-  let closest: number | null = null;
-  let closestDistance = Infinity;
-
-  for (const button of stage.querySelectorAll<HTMLButtonElement>("[data-colour-orb]")) {
-    const rect = button.getBoundingClientRect();
-    const distance = Math.hypot(pointerX - (rect.left + rect.width / 2), pointerY - (rect.top + rect.height / 2));
-    const index = Number(button.dataset.colourOrb);
-    if (Number.isInteger(index) && distance <= rect.width / 2 && distance < closestDistance) {
-      closest = index;
-      closestDistance = distance;
-    }
-  }
-
-  return closest;
-}
 
 export default function PhotoDetail({
   photograph,
@@ -64,10 +36,8 @@ export default function PhotoDetail({
   const photoRef = useRef<HTMLButtonElement>(null);
   const boundsRef = useRef<MeasuredBounds | null>(null);
   const orbPositionsRef = useRef<OrbPositions>({});
-  const pointerRef = useRef<{ x: number; y: number } | null>(null);
-  const hoveredRef = useRef<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const hasPalette = photograph.palette.length === gradientSlots.length;
+  const hasPalette = photograph.palette.length > 0;
   const gradients = useMemo<GradientOrbColour[]>(
     () => photograph.palette.slice(0, gradientSlots.length).map((colour, index) => ({
       ...gradientSlots[index],
@@ -86,41 +56,6 @@ export default function PhotoDetail({
   const updateOrbPosition = useCallback((id: string, x: number, y: number) => {
     orbPositionsRef.current[id] = { x, y };
   }, []);
-
-  const updateHoveredGradient = useCallback(() => {
-    const stage = stageRef.current;
-    const pointer = pointerRef.current;
-    const nearest = stage && pointer
-      ? closestGradientAt(stage, photoRef.current, pointer.x, pointer.y)
-      : null;
-
-    if (nearest !== hoveredRef.current) {
-      hoveredRef.current = nearest;
-      setHoveredPaletteIndex(nearest);
-    }
-  }, []);
-
-  useAnimationFrame(updateHoveredGradient);
-
-  const trackPointer = (event: PointerEvent<HTMLElement>) => {
-    if (event.pointerType === "touch") return;
-    pointerRef.current = { x: event.clientX, y: event.clientY };
-    updateHoveredGradient();
-  };
-
-  const clearPointer = () => {
-    pointerRef.current = null;
-    updateHoveredGradient();
-  };
-
-  const selectAtPointer = (event: PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || !stageRef.current) return;
-    const nearest = closestGradientAt(stageRef.current, photoRef.current, event.clientX, event.clientY);
-    if (nearest !== null) {
-      setSelectedPaletteIndex((current) => current === nearest ? null : nearest);
-      setVisibleCount(PAGE_SIZE);
-    }
-  };
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -176,10 +111,6 @@ export default function PhotoDetail({
         ref={stageRef}
         className="relative isolate grid h-svh w-full place-items-center"
         aria-label="Photograph and its palette gradients"
-        onPointerEnter={trackPointer}
-        onPointerMove={trackPointer}
-        onPointerLeave={clearPointer}
-        onPointerDown={selectAtPointer}
       >
         <BloomLayer
           backgroundColour={photograph.backgroundHex ?? "#ffffff"}
@@ -195,10 +126,13 @@ export default function PhotoDetail({
             paletteSize={gradients.length}
             isSelected={selectedPaletteIndex === index}
             isHovered={hoveredPaletteIndex === index}
+            stageRef={stageRef}
             boundsRef={boundsRef}
             positionsRef={orbPositionsRef}
             onPositionChange={updateOrbPosition}
-            onKeyboardSelect={() => {
+            onHoverChange={(hovered) => setHoveredPaletteIndex((current) => hovered ? index : current === index ? null : current)}
+            onSelect={() => {
+              playColourChord(index);
               setSelectedPaletteIndex((current) => current === index ? null : index);
               setVisibleCount(PAGE_SIZE);
             }}
@@ -221,13 +155,15 @@ export default function PhotoDetail({
               setVisibleCount(PAGE_SIZE);
             }}
             className="block h-full w-full cursor-pointer border-0 bg-white p-0 focus-visible:outline-[3px] focus-visible:outline-offset-4 focus-visible:outline-current disabled:cursor-default"
-            aria-label="Show photographs matching all seven colours"
+            aria-label="Show photographs matching the full palette"
           >
             <Image
+              key={photograph.id}
               src={photograph.src}
               alt={imageAlt}
               width={photograph.width}
               height={photograph.height}
+              placeholder={imagePlaceholder(photograph.backgroundHex)}
               priority
               loading="eager"
               sizes="(max-width: 639px) calc(100vw - 32px), 66.667vw"
@@ -238,6 +174,7 @@ export default function PhotoDetail({
       </section>
 
       <div className="relative z-3 px-4 sm:px-[calc(100vw/6)]">
+        <Link href="/photos" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4">All photographs</Link>
         <section className="pt-4 pb-12" aria-label="Similar photographs">
           <h1 className="sr-only">{photograph.title?.trim() || photograph.filename}</h1>
           <h2 className="sr-only">Similar photographs</h2>
@@ -255,6 +192,7 @@ export default function PhotoDetail({
                       alt={item.altText?.trim() || item.title?.trim() || "Photograph by Arnaud Belec"}
                       width={item.width}
                       height={item.height}
+                      placeholder={imagePlaceholder(item.backgroundHex)}
                       sizes="(max-width: 640px) 50vw, 22vw"
                       loading="lazy"
                       className="block h-auto w-full"

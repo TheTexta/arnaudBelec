@@ -1,4 +1,10 @@
-# BlockNote journal
+# Historical BlockNote journal
+
+> The custom BlockNote journal has been retired from the working source. Its
+> previous rollout evidence below is historical. The native Payload replacement,
+> complete-reset gates and current operations are documented in
+> [native-payload-journal.md](native-payload-journal.md). No production reset or
+> native cutover is implied by the source changes.
 
 ## Direction contract
 

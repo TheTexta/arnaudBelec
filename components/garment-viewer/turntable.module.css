@@ -1,0 +1,13 @@
+.viewer { margin: 0; color: inherit; }
+.sequence { touch-action: pan-y; cursor: ew-resize; user-select: none; }
+.sequence, .still { display: grid; place-items: center; }
+.viewer img { display: block; width: auto; max-width: 100%; height: auto; max-height: 80svh; object-fit: contain; }
+.viewer img[hidden] { display: none; }
+.viewer p { max-width: 65ch; margin: 12px 0; line-height: 1.5; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.controls span { font-variant-numeric: tabular-nums; }
+.controls button { min-height: 44px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.controls button:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; }
+.controls button:disabled { border-style: dashed; cursor: not-allowed; }
+.viewer :focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.viewer a { color: inherit; text-underline-offset: 4px; }

@@ -2,7 +2,7 @@ import type { PaletteColour, PublicPhotograph } from "@/lib/supabase-public";
 
 const SIMILARITY_THRESHOLD = 20;
 const MINIMUM_MATCHES = 5;
-const PALETTE_SIZE = 7;
+const MAXIMUM_PALETTE_SIZE = 7;
 const MONOCHROME_CHROMA_THRESHOLD = 1;
 
 function validColours(palette: PaletteColour[] | null | undefined): PaletteColour[] {
@@ -38,21 +38,26 @@ function singleColourDistance(selected: PaletteColour, candidates: PaletteColour
   ));
 }
 
-function paletteDistance(selected: PaletteColour[], candidates: PaletteColour[]): number {
+export function paletteDistance(first: PaletteColour[], second: PaletteColour[]): number {
+  if (!first.length || !second.length || Math.max(first.length, second.length) > MAXIMUM_PALETTE_SIZE) return Infinity;
+  // Match every colour in the larger palette, reusing smaller-palette swatches
+  // only when necessary. Requiring the full mask prevents convenient subsets.
+  const [selected, candidates] = first.length >= second.length ? [first, second] : [second, first];
+  const completeMask = (1 << candidates.length) - 1;
+  const allowReuse = selected.length > candidates.length;
   const bestByUsedMask = new Map<number, number>();
 
-  // Each selected colour gets a distinct candidate colour. Memoizing each set
-  // of used colours keeps the seven-colour assignment inexpensive.
   function smallestRemainingDistance(index: number, usedMask: number): number {
-    if (index === PALETTE_SIZE) return 0;
+    if (index === selected.length) return usedMask === completeMask ? 0 : Infinity;
 
-    const cached = bestByUsedMask.get(usedMask);
+    const key = index * (completeMask + 1) + usedMask;
+    const cached = bestByUsedMask.get(key);
     if (cached !== undefined) return cached;
 
     let best = Number.POSITIVE_INFINITY;
     for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
       const candidateBit = 1 << candidateIndex;
-      if (usedMask & candidateBit) continue;
+      if (!allowReuse && (usedMask & candidateBit)) continue;
 
       best = Math.min(
         best,
@@ -61,17 +66,17 @@ function paletteDistance(selected: PaletteColour[], candidates: PaletteColour[])
       );
     }
 
-    bestByUsedMask.set(usedMask, best);
+    bestByUsedMask.set(key, best);
     return best;
   }
 
-  return Math.sqrt(smallestRemainingDistance(0, 0) / PALETTE_SIZE);
+  return Math.sqrt(smallestRemainingDistance(0, 0) / selected.length);
 }
 
 /**
- * Finds photographs with similar palettes. Pass `null` to compare all seven
+ * Finds photographs with similar palettes. Pass `null` to compare all stored
  * swatches, or a zero-based palette index to compare one selected swatch.
- * Invalid or incomplete palettes are omitted; no match returns an empty array.
+ * Empty or oversized palettes are omitted; no match returns an empty array.
  * Detail pages exclude the current photo by default; the homepage includes it.
  */
 export function findSimilarPhotographs<T extends PublicPhotograph>(
@@ -85,7 +90,7 @@ export function findSimilarPhotographs<T extends PublicPhotograph>(
   const sourceColours = validColours(current.palette);
   const comparingPalette = selectedPaletteIndex === null;
 
-  if (comparingPalette && sourceColours.length < PALETTE_SIZE) return [];
+  if (!sourceColours.length || sourceColours.length > MAXIMUM_PALETTE_SIZE) return [];
   if (
     !comparingPalette &&
     (!Number.isInteger(selectedPaletteIndex) ||
@@ -102,12 +107,12 @@ export function findSimilarPhotographs<T extends PublicPhotograph>(
 
     const candidateColours = validColours(candidate.palette);
     if (
-      candidateColours.length < (comparingPalette ? PALETTE_SIZE : 1) ||
+      !candidateColours.length || candidateColours.length > MAXIMUM_PALETTE_SIZE ||
       isMonochrome(candidateColours) !== sourceIsMonochrome
     ) return [];
 
     const score = comparingPalette
-      ? paletteDistance(sourceColours.slice(0, PALETTE_SIZE), candidateColours)
+      ? paletteDistance(sourceColours, candidateColours)
       : singleColourDistance(selectedColour!, candidateColours);
 
     return [{ photograph: candidate, score }];

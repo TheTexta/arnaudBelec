@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AdminApiError, useAdminNavigationWarning, useSiteAdmin } from "./admin-access";
 import { Upload } from "tus-js-client";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { MMCQ_SAMPLE_LONGEST_SIDE } from "@/lib/palette/config.mjs";
 
 type UploadEntry = {
   id: string;
@@ -41,7 +42,7 @@ async function imageSample(file: File): Promise<{ sample: Blob; width: number; h
     if (width < 1 || height < 1 || width * height > MAXIMUM_INPUT_PIXELS) {
       throw new Error("The image dimensions are invalid or exceed the 120-million-pixel limit.");
     }
-    const scale = Math.min(1, 96 / Math.max(width, height));
+    const scale = Math.min(1, MMCQ_SAMPLE_LONGEST_SIDE / Math.max(width, height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * scale));
     canvas.height = Math.max(1, Math.round(height * scale));

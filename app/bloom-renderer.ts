@@ -4,14 +4,10 @@ import {
 } from "three";
 import { gradientDiameterVw, orbPulseScale, ORB_GRAIN_FRAME_MS, type GradientOrbColour } from "./gradient-orb";
 import type { OrbPositions } from "./bloom-layer";
+import { BLOOM_DEFAULTS, BLOOM_VERTEX_SHADER, bloomFragmentShader, bloomPixelRatio } from "../lib/visual/bloom-shader";
 
 // Grain is applied in linear light; its size is in CSS pixels, independent of DPR.
-const GRAIN_STRENGTH = 0.035;
-const GRAIN_SIZE = 1;
-const GRAIN_SPEED = 1;
-const MAX_COLOURS = 7;
-const MAX_PIXEL_RATIO = 1.5;
-const MAX_PIXELS = 2_500_000;
+const { grainStrength: GRAIN_STRENGTH, grainSize: GRAIN_SIZE, grainSpeed: GRAIN_SPEED, maxColours: MAX_COLOURS } = BLOOM_DEFAULTS;
 
 export function createBloomRenderer(canvas: HTMLCanvasElement) {
   const renderer = new WebGLRenderer({ canvas, alpha: false, antialias: false, depth: false, stencil: false });
@@ -34,91 +30,8 @@ export function createBloomRenderer(canvas: HTMLCanvasElement) {
     depthWrite: false,
     blending: NoBlending,
     dithering: true,
-    vertexShader: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }
-    `,
-    fragmentShader: `
-      #include <common>
-      #include <dithering_pars_fragment>
-      uniform vec2 uResolution;
-      uniform vec3 uBackground;
-      uniform vec3 uColours[${MAX_COLOURS}];
-      uniform vec4 uOrbs[${MAX_COLOURS}];
-      uniform float uOrbActive[${MAX_COLOURS}];
-      uniform float uOrbScale[${MAX_COLOURS}];
-      uniform float uOrbFrame;
-      uniform float uTime;
-      uniform float uGrainStrength;
-      uniform float uGrainSize;
-      varying vec2 vUv;
-
-      void main() {
-        vec2 pixel = vec2(vUv.x, 1.0 - vUv.y) * uResolution;
-        // Compose in sRGB to retain the CSS gradients' palette and overlap colours.
-        vec3 colour = uBackground;
-        for (int i = 0; i < ${MAX_COLOURS}; i++) {
-          vec4 orb = uOrbs[i];
-          float radius = max(orb.z, 1.0);
-          float distanceFromCentre = length(pixel - orb.xy) / radius;
-          float falloff = 1.0 - smoothstep(0.0, 1.0, distanceFromCentre);
-          colour = mix(colour, uColours[i], falloff * orb.w);
-        }
-
-        colour = sRGBTransferEOTF(vec4(colour, 1.0)).rgb;
-        vec2 cell = floor(pixel / uGrainSize);
-        float seed = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
-        float noise = fract(seed + uTime) - 0.5;
-        // Fade at black to avoid lifting shadows when negative noise would clip.
-        float luminance = dot(colour, vec3(0.2126, 0.7152, 0.0722));
-        float shadowMask = smoothstep(0.0, 0.06, luminance);
-        colour = clamp(colour + noise * uGrainStrength * shadowMask, 0.0, 1.0);
-
-        // Draw the selectable orbs into the same image as the gradients. Screen
-        // each four-CSS-pixel sample against the finished background colour.
-        vec3 screened = sRGBTransferOETF(vec4(colour, 1.0)).rgb;
-        vec2 orbNoiseCell = floor(pixel / 4.0);
-        vec2 orbSample = orbNoiseCell * 4.0 + 2.0;
-        float orbSeed = fract(sin(dot(orbNoiseCell, vec2(12.9898, 78.233)) + uOrbFrame * 37.719) * 43758.5453);
-        float orbNoise = orbSeed - 0.5;
-        for (int i = 0; i < ${MAX_COLOURS}; i++) {
-          vec4 orb = uOrbs[i];
-          if (orb.w == 0.0) continue;
-
-          vec2 local = pixel - orb.xy;
-          float orbScale = uOrbScale[i];
-          float distancePx = length(local) / orbScale;
-          if (distancePx > 56.0) continue;
-
-          float orbActivity = uOrbActive[i];
-          float softGlow = (1.0 - smoothstep(16.0, 48.0, distancePx)) * (0.2 + orbActivity * 0.12);
-          screened = 1.0 - (1.0 - screened) * (1.0 - uColours[i] * softGlow);
-
-          // Sample the orb on the same screen-space cells as its shared noise.
-          float cellDistance = length(orbSample - orb.xy) / (4.0 * orbScale);
-          float colourRadius = (0.70710678 + 7.5) / 2.0;
-          float edgeRadius = colourRadius + (7.5 - colourRadius) * 2.5;
-          if (cellDistance > edgeRadius) continue;
-
-          float innerFade = clamp((cellDistance - 0.70710678) / (colourRadius - 0.70710678), 0.0, 1.0);
-          float outerFade = clamp((cellDistance - colourRadius) / (edgeRadius - colourRadius), 0.0, 1.0);
-          float outerAlpha = (exp(-3.0 * outerFade) - exp(-3.0)) / (1.0 - exp(-3.0));
-          float whiteMix = 1.0 - innerFade;
-          float grainFade = cellDistance <= colourRadius
-            ? min(innerFade, 1.0 - innerFade) * 2.0
-            : min(outerFade, 1.0 - outerFade) * 2.0;
-          vec3 orbColour = clamp(mix(uColours[i], vec3(1.0), whiteMix) * (1.0 + orbNoise * 0.2 * grainFade), 0.0, 1.0);
-          screened = 1.0 - (1.0 - screened) * (1.0 - orbColour * outerAlpha);
-        }
-        colour = sRGBTransferEOTF(vec4(screened, 1.0)).rgb;
-        gl_FragColor = vec4(colour, 1.0);
-        #include <colorspace_fragment>
-        #include <dithering_fragment>
-      }
-    `,
+    vertexShader: BLOOM_VERTEX_SHADER,
+    fragmentShader: bloomFragmentShader(),
   });
   const scene = new Scene();
   scene.add(new Mesh(geometry, material));
@@ -162,7 +75,7 @@ export function createBloomRenderer(canvas: HTMLCanvasElement) {
       const nextWidth = canvas.clientWidth;
       const nextHeight = canvas.clientHeight;
       if (!nextWidth || !nextHeight) return false;
-      const nextRatio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO, Math.sqrt(MAX_PIXELS / (nextWidth * nextHeight)));
+      const nextRatio = bloomPixelRatio(nextWidth, nextHeight, window.devicePixelRatio);
       if (width !== nextWidth || height !== nextHeight || pixelRatio !== nextRatio) {
         width = nextWidth;
         height = nextHeight;

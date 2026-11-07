@@ -1,40 +1,122 @@
 @import "../../app/blog/blog.css";
 
-:root {
-  --font-body: var(--font-non-photo-text), "Nunito Sans", sans-serif;
-  --font-serif: var(--font-non-photo-display), Jost, sans-serif;
+/* Admin-only: public journal/preview colours remain in blog.css. */
+.cms-admin {
+  --font-body: var(--font-non-photo-text), cursive;
+  --font-serif: var(--font-body);
+  --font-mono: var(--font-body);
+  --style-radius-s: 0;
+  --style-radius-m: 0;
+  --style-radius-l: 0;
+  --theme-text: #000;
+  --theme-bg: #fff;
+  --theme-border-color: var(--theme-elevation-250);
+  --theme-success-50: var(--theme-elevation-50);
+  --theme-success-100: var(--theme-elevation-100);
+  --theme-success-150: var(--theme-elevation-150);
+  --theme-success-200: var(--theme-elevation-200);
+  --theme-success-250: var(--theme-elevation-250);
+  --theme-success-300: var(--theme-elevation-300);
+  --theme-success-350: var(--theme-elevation-350);
+  --theme-success-400: var(--theme-elevation-400);
+  --theme-success-450: var(--theme-elevation-450);
+  --theme-success-500: var(--theme-elevation-700);
+  --theme-success-550: var(--theme-elevation-550);
+  --theme-success-600: var(--theme-elevation-600);
+  --theme-success-650: var(--theme-elevation-650);
+  --theme-success-700: var(--theme-elevation-700);
+  --theme-success-750: var(--theme-elevation-750);
+  --theme-success-800: var(--theme-elevation-800);
+  --theme-success-850: var(--theme-elevation-850);
+  --theme-success-900: var(--theme-elevation-900);
+  --theme-success-950: var(--theme-elevation-950);
+  --theme-error-50: var(--theme-elevation-50);
+  --theme-error-100: var(--theme-elevation-100);
+  --theme-error-150: var(--theme-elevation-150);
+  --theme-error-200: var(--theme-elevation-200);
+  --theme-error-250: var(--theme-elevation-250);
+  --theme-error-300: var(--theme-elevation-300);
+  --theme-error-350: var(--theme-elevation-350);
+  --theme-error-400: var(--theme-elevation-400);
+  --theme-error-450: var(--theme-elevation-450);
+  --theme-error-500: var(--theme-elevation-700);
+  --theme-error-550: var(--theme-elevation-550);
+  --theme-error-600: var(--theme-elevation-600);
+  --theme-error-650: var(--theme-elevation-650);
+  --theme-error-700: var(--theme-elevation-700);
+  --theme-error-750: var(--theme-elevation-750);
+  --theme-error-800: var(--theme-elevation-800);
+  --theme-error-850: var(--theme-elevation-850);
+  --theme-error-900: var(--theme-elevation-900);
+  --theme-error-950: var(--theme-elevation-950);
+  --theme-warning-50: var(--theme-elevation-50);
+  --theme-warning-100: var(--theme-elevation-100);
+  --theme-warning-150: var(--theme-elevation-150);
+  --theme-warning-200: var(--theme-elevation-200);
+  --theme-warning-250: var(--theme-elevation-250);
+  --theme-warning-300: var(--theme-elevation-300);
+  --theme-warning-350: var(--theme-elevation-350);
+  --theme-warning-400: var(--theme-elevation-400);
+  --theme-warning-450: var(--theme-elevation-450);
+  --theme-warning-500: var(--theme-elevation-700);
+  --theme-warning-550: var(--theme-elevation-550);
+  --theme-warning-600: var(--theme-elevation-600);
+  --theme-warning-650: var(--theme-elevation-650);
+  --theme-warning-700: var(--theme-elevation-700);
+  --theme-warning-750: var(--theme-elevation-750);
+  --theme-warning-800: var(--theme-elevation-800);
+  --theme-warning-850: var(--theme-elevation-850);
+  --theme-warning-900: var(--theme-elevation-900);
+  --theme-warning-950: var(--theme-elevation-950);
+  color-scheme: light;
+  accent-color: var(--theme-text);
+  caret-color: var(--theme-text);
+  scrollbar-color: var(--theme-elevation-500) var(--theme-bg);
 }
-html[data-theme="dark"] {
-  --theme-bg: #090807;
-  --theme-text: #eadfce;
-  --theme-elevation-0: #090807;
-  --theme-elevation-50: #141210;
-  --theme-elevation-100: #211b15;
-  --theme-elevation-150: #33291e;
-  --theme-elevation-200: #7d6a52;
-  --theme-elevation-500: #b5a895;
-  --theme-elevation-800: #eadfce;
-  --theme-elevation-1000: #eadfce;
+.cms-admin[data-theme="dark"] {
+  --theme-bg: #000;
+  --theme-text: #ebebeb;
+  color-scheme: dark;
 }
-.cms-session { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #090807; color: #eadfce; }
+.cms-admin ::selection { background: var(--theme-text); color: var(--theme-bg); }
+.cms-admin :focus-visible { outline: 2px solid var(--theme-text); outline-offset: 3px; }
+.cms-admin :is(.btn, .card, .popup__content, .drawer__content, button, textarea, select) { border-radius: 0; }
+.cms-admin :is(input, textarea, .rs__control) { border-color: var(--theme-elevation-500); }
+.cms-admin :is(input, textarea)::placeholder { color: var(--theme-elevation-650); opacity: 1; }
+.cms-admin body { font-size: 20px; line-height: 1.65; }
+.cms-admin :is(input, textarea, select, button, label, .field-label, .field-description, .nav__link, .doc-controls__label) { font-size: 20px; line-height: 1.65; }
+.cms-admin :is(.field-description, .doc-controls__label) { color: var(--theme-elevation-650); }
+/* Payload's account rules otherwise extend beyond its smaller mobile gutters. */
+.cms-admin .payload-settings::before, .cms-admin .payload-settings::after { width: calc(100% + var(--gutter-h) * 2); }
+.cms-session { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--theme-bg); color: var(--theme-text); }
 .cms-session form { width: min(100%, 440px); }
-.cms-session h1 { color: #c69b69; font-family: var(--font-non-photo-display), Jost, sans-serif; font-weight: 400; }
+.cms-session h1 { color: inherit; font-weight: 600; }
 .cms-session label { display: grid; gap: 8px; margin-block: 24px; }
-.cms-session input, .cms-session button { min-height: 44px; padding: 12px; border: 1px solid #7d6a52; border-radius: 2px; font: inherit; }
-.cms-session input { background: #141210; color: #eadfce; }
-.cms-session button { background: #c69b69; color: #090807; cursor: pointer; }
+.cms-session input, .cms-session button { min-height: 44px; padding: 12px; border: 1px solid var(--theme-elevation-500); border-radius: 0; font: inherit; }
+.cms-session input { background: var(--theme-input-bg); color: var(--theme-text); }
+.cms-session button { background: var(--theme-text); color: var(--theme-bg); border-color: var(--theme-text); cursor: pointer; }
 .cms-session button:disabled { opacity: .5; cursor: wait; }
-.cms-session button:hover { background: #eadfce; }
-.cms-session a { display: block; margin-block-start: 24px; color: #c69b69; }
-.cms-session :focus-visible, .cms-blocknote :focus-visible { outline: 2px solid #c69b69; outline-offset: 4px; }
-.cms-session ::selection { background: #c69b69; color: #090807; }
+.cms-session button:hover:not(:disabled) { background: var(--theme-elevation-800); }
+.cms-session a { display: block; margin-block-start: 24px; color: inherit; text-decoration: underline; text-underline-offset: 4px; }
+.cms-session [role="alert"] { border: 1px solid currentColor; padding: 12px; }
 .cms-extra-nav { display: grid; gap: 16px; padding-block: 24px; }
-.template-default h1 { color: #c69b69; font-family: var(--font-non-photo-display), Jost, sans-serif; font-weight: 400; }
-.cms-blocknote { min-height: 0; padding: 0; background: transparent; }
-.cms-blocknote .blog-editor-surface { min-height: 320px; padding: 24px 32px; border: 1px solid #7d6a52; background: #141210; color: #eadfce; }
-.cms-photographs { min-height: auto; }
+.cms-photographs {
+  --journal-paper: var(--theme-bg);
+  --journal-panel: var(--theme-elevation-50);
+  --journal-ink: var(--theme-text);
+  --journal-title: var(--theme-text);
+  --journal-muted: var(--theme-elevation-650);
+  --journal-line: var(--theme-elevation-500);
+  --journal-display: var(--font-body);
+  --journal-text: var(--font-body);
+  --journal-accent: var(--theme-text);
+  min-height: auto;
+  color-scheme: inherit;
+}
+.cms-photographs :is(.blog-button, .blog-notice, .blog-login, .blog-field input, .blog-field textarea) { border-radius: 0; }
+.cms-photographs :is(.blog-error, .photo-upload-error, .blog-button-danger) { color: var(--theme-text); }
+.cms-photographs .blog-error { background: var(--theme-elevation-50); border-color: currentColor; }
 .cms-preview { min-height: auto; }
-.cms-recovery { min-height: 0; padding: 20px; border: 1px solid #7d6a52; background: #141210; color: #eadfce; margin-block-end: 24px; }
-.cms-recovery p { max-width: 68ch; margin-block: 0 16px; }
+.cms-preview ::selection { background: var(--journal-title); color: var(--journal-paper); }
+.cms-preview :focus-visible { outline-color: var(--journal-title); }
 .field-diff-content pre { max-width: 100%; overflow-x: auto; }
-@media (max-width: 600px) { .cms-blocknote .blog-editor-surface { padding: 20px 12px; } }

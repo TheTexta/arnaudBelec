@@ -1,0 +1,21 @@
+.public-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  contain: strict;
+  pointer-events: none;
+  user-select: none;
+}
+
+.public-atmosphere.public-atmosphere--contained {
+  position: absolute;
+}
+
+.public-atmosphere > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  visibility: hidden;
+  pointer-events: none;
+}

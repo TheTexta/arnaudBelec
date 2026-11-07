@@ -1,0 +1,14 @@
+/* Both application roots use the same owner-supplied face. */
+html {
+  --font-non-photo-display: var(--font-site);
+  --font-non-photo-text: var(--font-site);
+  font-synthesis: none;
+}
+
+body {
+  font-family: var(--font-site), cursive;
+}
+
+button, input, textarea, select, optgroup {
+  font-family: inherit;
+}

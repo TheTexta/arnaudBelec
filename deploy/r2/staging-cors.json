@@ -2,7 +2,7 @@
   {
     "AllowedOrigins": ["https://arnaud-belec.vercel.app"],
     "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
+    "AllowedHeaders": ["Content-Type", "If-None-Match", "Range"],
     "ExposeHeaders": ["ETag"],
     "MaxAgeSeconds": 3600
   }
