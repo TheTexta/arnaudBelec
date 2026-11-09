@@ -150,6 +150,16 @@ export interface CmsUser {
  */
 export interface Post {
   id: string;
+  /**
+   * Inherit the section palette, or set this page’s background, atmosphere colours and accent. Publish to make changes public.
+   */
+  palette?: {
+    mode?: ('inherit' | 'custom') | null;
+    background?: string | null;
+    colourA?: string | null;
+    colourB?: string | null;
+    accent?: string | null;
+  };
   title: string;
   /**
    * Generated for drafts when blank. Fixed after first publication.
@@ -182,7 +192,7 @@ export interface Post {
   _status?: ('draft' | 'published') | null;
 }
 /**
- * Private originals. Files become anonymously readable only while used by a published journal post. To replace a file, upload a new original.
+ * Private originals. Files become anonymously readable only while referenced by a published Journal post, project or Site settings. Homepage selections stay private until Site settings are published. To replace a file, upload a new original.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media".
@@ -237,6 +247,11 @@ export interface Video {
     [k: string]: unknown;
   } | null;
   cover?: (string | null) | Media;
+  /**
+   * Blank preserves legacy behavior: use the uploaded film when present, otherwise none. Switching source never deletes the original film.
+   */
+  videoSource?: ('upload' | 'youtube' | 'none') | null;
+  youtubeUrl?: string | null;
   film?: (string | null) | Media;
   gallery?: (string | Media)[] | null;
   /**
@@ -280,6 +295,16 @@ export interface FashionProject {
     [k: string]: unknown;
   } | null;
   cover?: (string | null) | Media;
+  /**
+   * Inherit the section palette, or set this page’s background, atmosphere colours and accent. Publish to make changes public.
+   */
+  palette?: {
+    mode?: ('inherit' | 'custom') | null;
+    background?: string | null;
+    colourA?: string | null;
+    colourB?: string | null;
+    accent?: string | null;
+  };
   film?: (string | null) | Media;
   gallery?: (string | Media)[] | null;
   /**
@@ -447,6 +472,15 @@ export interface CmsUsersSelect<T extends boolean = true> {
  * via the `definition` "posts_select".
  */
 export interface PostsSelect<T extends boolean = true> {
+  palette?:
+    | T
+    | {
+        mode?: T;
+        background?: T;
+        colourA?: T;
+        colourB?: T;
+        accent?: T;
+      };
   title?: T;
   slug?: T;
   excerpt?: T;
@@ -490,6 +524,8 @@ export interface VideosSelect<T extends boolean = true> {
   excerpt?: T;
   body?: T;
   cover?: T;
+  videoSource?: T;
+  youtubeUrl?: T;
   film?: T;
   gallery?: T;
   turntableFrames?: T;
@@ -512,6 +548,15 @@ export interface FashionProjectsSelect<T extends boolean = true> {
   excerpt?: T;
   body?: T;
   cover?: T;
+  palette?:
+    | T
+    | {
+        mode?: T;
+        background?: T;
+        colourA?: T;
+        colourB?: T;
+        accent?: T;
+      };
   film?: T;
   gallery?: T;
   turntableFrames?: T;
@@ -646,6 +691,20 @@ export interface SiteSetting {
       image?: (string | null) | Media;
     };
   };
+  /**
+   * The featured video appears first, followed by manual order and remaining published videos. Save a draft, preview, then Publish Site settings to release all settings together.
+   */
+  videoPage?: {
+    heading?: string | null;
+    intro?: string | null;
+    featuredVideo?: (string | null) | Video;
+    orderedVideos?:
+      | {
+          video: string | Video;
+          id?: string | null;
+        }[]
+      | null;
+  };
   intro?: string | null;
   contactEmail?: string | null;
   socialLinks?:
@@ -718,6 +777,19 @@ export interface SiteSettingsSelect<T extends boolean = true> {
               source?: T;
               photographId?: T;
               image?: T;
+            };
+      };
+  videoPage?:
+    | T
+    | {
+        heading?: T;
+        intro?: T;
+        featuredVideo?: T;
+        orderedVideos?:
+          | T
+          | {
+              video?: T;
+              id?: T;
             };
       };
   intro?: T;

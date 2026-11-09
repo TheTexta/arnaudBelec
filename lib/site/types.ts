@@ -1,5 +1,7 @@
 import type { Post } from "@/payload-types";
 import { defaultHomepage, type HomepageSettings } from "./homepage";
+import type { PagePalette } from "./page-palette";
+import type { VideoSource } from "../media/youtube";
 
 export type ProjectKind = "video" | "fashion";
 
@@ -23,6 +25,9 @@ export type PublicProject = {
   body: Post["body"];
   cover: PublicMedia | null;
   film: PublicMedia | null;
+  videoSource: VideoSource;
+  youtubeId: string | null;
+  palette: PagePalette | null;
   gallery: PublicMedia[];
   turntableFrames: PublicMedia[];
   credits: string;
@@ -32,6 +37,7 @@ export type PublicProject = {
 
 export type SiteSettings = {
   homepage: HomepageSettings;
+  videoPage: VideoPageSettings;
   intro: string;
   contactEmail: string;
   socialLinks: { label: string; url: string }[];
@@ -42,8 +48,16 @@ export type SiteSettings = {
   newsletterEnabled: boolean;
 };
 
+export type VideoPageSettings = {
+  heading: string;
+  intro: string;
+  featuredVideoId: string | null;
+  orderedVideoIds: string[];
+};
+
 export const defaultSiteSettings: SiteSettings = {
   homepage: defaultHomepage(),
+  videoPage: { heading: "Video", intro: "", featuredVideoId: null, orderedVideoIds: [] },
   intro: "A place for photographs, films and things in progress.",
   contactEmail: "arnaudnaudbel@protonmail.com",
   socialLinks: [],

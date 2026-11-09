@@ -2,11 +2,12 @@ import {
   Color, Mesh, NoBlending, OrthographicCamera, PlaneGeometry,
   Scene, ShaderMaterial, Vector2, Vector4, WebGLRenderer,
 } from "three";
-import { ATMOSPHERE_PROFILES, atmosphereField, type AtmospherePreset } from "../../lib/visual/atmosphere";
+import { atmosphereProfile, atmosphereField, type AtmospherePreset } from "../../lib/visual/atmosphere";
+import type { PagePalette } from "../../lib/site/page-palette";
 import { BLOOM_DEFAULTS, BLOOM_VERTEX_SHADER, bloomFragmentShader, bloomPixelRatio } from "../../lib/visual/bloom-shader";
 
-export function createAtmosphereRenderer(canvas: HTMLCanvasElement, preset: AtmospherePreset) {
-  const profile = ATMOSPHERE_PROFILES[preset];
+export function createAtmosphereRenderer(canvas: HTMLCanvasElement, preset: AtmospherePreset, palette: PagePalette | null = null) {
+  const profile = atmosphereProfile(preset, palette);
   const renderer = new WebGLRenderer({ canvas, alpha: false, antialias: false, depth: false, stencil: false });
   const geometry = new PlaneGeometry(2, 2);
   const uniforms = {
@@ -19,7 +20,7 @@ export function createAtmosphereRenderer(canvas: HTMLCanvasElement, preset: Atmo
     uOrbScale: { value: new Float32Array(BLOOM_DEFAULTS.maxColours) },
     uOrbFrame: { value: 0 },
     uTime: { value: 0 },
-    uGrainStrength: { value: BLOOM_DEFAULTS.grainStrength },
+    uGrainStrength: { value: palette ? .005 : BLOOM_DEFAULTS.grainStrength },
     uGrainSize: { value: BLOOM_DEFAULTS.grainSize },
     uPointer: { value: new Vector2() },
     uWaveStrength: { value: 0 },
@@ -63,7 +64,7 @@ export function createAtmosphereRenderer(canvas: HTMLCanvasElement, preset: Atmo
         uniforms.uOrbs.value[i].set(field.x * w, field.y * h, field.radius * Math.max(w, h),
           field.opacity * (i >= 5 ? profile.accentOpacity : profile.washOpacity));
         // Warm reading pages have no decorative point lights.
-        uniforms.uOrbScale.value[i] = preset === "journal" ? 0 : field.lightScale;
+        uniforms.uOrbScale.value[i] = palette || preset === "journal" ? 0 : field.lightScale;
       }
       uniforms.uTime.value = reducedMotion ? 0 : (seconds * BLOOM_DEFAULTS.grainSpeed) % 1;
       uniforms.uOrbFrame.value = reducedMotion ? 0 : Math.floor(seconds * 1000 / BLOOM_DEFAULTS.orbFrameMs);

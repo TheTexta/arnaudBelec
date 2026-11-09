@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { PublicMedia } from "@/lib/site/types";
 import { canPlayChord, COLOUR_CHORD_EVENT, safeVolume } from "@/lib/audio/colour-chords";
 import { ColourInstrument } from "@/lib/audio/instrument";
+import { hasActiveExternalMedia, subscribeExternalMedia } from "@/lib/audio/external-media";
 
 type Status = "off" | "loading" | "playing" | "paused" | "ended" | "error";
 type AudioControls = {
@@ -51,6 +52,18 @@ export function PublicAudioProvider({ track, children }: { track: PublicMedia | 
     mounted.current = true;
     const ambient = player.current;
     const mediaSet = otherMedia.current;
+    const unsubscribeExternal = subscribeExternalMedia(() => {
+      if (hasActiveExternalMedia()) {
+        playRequest.current++;
+        player.current?.pause();
+        if (player.current) setStatus("paused");
+        setMessage("Music paused for other media. Play music again when you’re ready.");
+        instrument.current?.setVolume(0);
+      } else if (!hasOtherMedia()) {
+        const state = current.current;
+        instrument.current?.setVolume(state.muted || !state.colourSound ? 0 : state.volume);
+      }
+    });
     const play = (event: Event) => {
       const media = event.target;
       if (!(media instanceof HTMLMediaElement) || media === player.current) return;
@@ -84,6 +97,7 @@ export function PublicAudioProvider({ track, children }: { track: PublicMedia | 
     window.addEventListener(COLOUR_CHORD_EVENT, chord);
     return () => {
       mounted.current = false;
+      unsubscribeExternal();
       document.removeEventListener("play", play, true);
       document.removeEventListener("pause", finish, true);
       document.removeEventListener("ended", finish, true);
@@ -100,7 +114,7 @@ export function PublicAudioProvider({ track, children }: { track: PublicMedia | 
       if (!media.isConnected || media.paused || media.ended) otherMedia.current.delete(media);
     }
     // Also catch media already playing when the provider mounted.
-    return otherMedia.current.size > 0 || Array.from(document.querySelectorAll("audio, video"))
+    return hasActiveExternalMedia() || otherMedia.current.size > 0 || Array.from(document.querySelectorAll("audio, video"))
       .some((media) => media instanceof HTMLMediaElement && media !== player.current && !media.paused && !media.ended);
   }
 

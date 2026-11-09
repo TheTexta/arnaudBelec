@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ProjectFeed } from "@/components/site/ProjectFeed";
 import { ProjectLoading } from "@/components/site/ProjectState";
+import { PublicSiteFrame } from "@/components/site/PublicSiteFrame";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <Suspense fallback={<ProjectLoading kind="fashion" />}><ProjectFeed kind="fashion" /></Suspense>;
+  return <PublicSiteFrame><Suspense fallback={<ProjectLoading kind="fashion" />}><ProjectFeed kind="fashion" /></Suspense></PublicSiteFrame>;
 }

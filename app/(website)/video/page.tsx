@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ProjectFeed } from "@/components/site/ProjectFeed";
 import { ProjectLoading } from "@/components/site/ProjectState";
+import { PublicSiteFrame } from "@/components/site/PublicSiteFrame";
+import { getPublicSiteSettings } from "@/lib/site/public";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -10,6 +12,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/video" },
 };
 
-export default function Page() {
-  return <Suspense fallback={<ProjectLoading kind="video" />}><ProjectFeed kind="video" /></Suspense>;
+export default async function Page() {
+  const settings = await getPublicSiteSettings();
+  return <PublicSiteFrame><Suspense fallback={<ProjectLoading kind="video" />}><ProjectFeed kind="video" videoPage={settings.videoPage} /></Suspense></PublicSiteFrame>;
 }

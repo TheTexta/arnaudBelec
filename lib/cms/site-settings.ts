@@ -5,6 +5,7 @@ import { editRevision, siteTransaction } from "./projects";
 import { mediaId, requireSiteExpansion, siteAdmin, siteExpansionEnabled, siteRead, validateSiteMedia } from "./site-access";
 import { defaultSiteSettings } from "../site/types";
 import { homepageField, homepageMediaUses, homepagePhotographs, HomepageValidationError, mergeHomepage } from "./homepage";
+import { mergeVideoPage, validateVideoPage, videoPageField } from "./video-page";
 
 const WRITE = Symbol("native settings write");
 const RESTORE = Symbol("private settings restore");
@@ -47,7 +48,7 @@ export async function restoreSiteSettingsVersion(req: PayloadRequest, id: string
 
 export const SiteSettings: GlobalConfig = {
   slug: "site-settings", label: "Site settings", lockDocuments: siteExpansionEnabled() ? { duration: 300 } : false,
-  admin: { hidden: () => !siteExpansionEnabled(), components: { elements: { UnpublishButton: "/components/cms/NativeUnpublish#NativeUnpublish" } } },
+  admin: { hidden: () => !siteExpansionEnabled(), preview: () => "/cms/video-page-preview", components: { elements: { UnpublishButton: "/components/cms/NativeUnpublish#NativeUnpublish" } } },
   access: { read: siteRead, update: siteAdmin, readVersions: siteAdmin },
   versions: { drafts: { autosave: { interval: 1500 } }, max: 0 },
   endpoints: [{ path: "/homepage-photographs", method: "get", handler: homepagePhotographs }, { path: "/versions/:id", method: "post", handler: async req => {
@@ -85,6 +86,8 @@ export const SiteSettings: GlobalConfig = {
       const merged = { ...originalDoc, ...data };
       merged.homepage = mergeHomepage(originalDoc?.homepage, data.homepage);
       if (data.homepage) data.homepage = merged.homepage;
+      merged.videoPage = mergeVideoPage(originalDoc?.videoPage, data.videoPage);
+      if (data.videoPage !== undefined) data.videoPage = merged.videoPage;
       const publishing = data._status === "published" && !write.restoring;
       let validationPath = "ambientAudio";
       try {
@@ -98,6 +101,9 @@ export const SiteSettings: GlobalConfig = {
         // Draft field validation is skipped natively, but publication must check
         // every merged field, including values inherited from a prior autosave.
         if (publishing) {
+          validationPath = "videoPage";
+          await validateVideoPage(merged.videoPage, req);
+          validationPath = "contactEmail";
           if (validContactEmail(merged.contactEmail) !== true) throw new APIError("Enter a valid contact email.", 400);
           if (merged.featuredPhotoId && !uuid(merged.featuredPhotoId)) throw new APIError("Use a photograph UUID for the featured image.", 400);
           for (const field of ["colourPhotoIds", "monochromePhotoIds"]) {
@@ -114,6 +120,7 @@ export const SiteSettings: GlobalConfig = {
   },
   fields: [
     homepageField,
+    videoPageField,
     { name: "intro", type: "textarea", maxLength: 5000, defaultValue: defaultSiteSettings.intro },
     { name: "contactEmail", type: "text", maxLength: 320, defaultValue: defaultSiteSettings.contactEmail, validate: validContactEmail },
     { name: "socialLinks", type: "array", maxRows: 50, fields: [

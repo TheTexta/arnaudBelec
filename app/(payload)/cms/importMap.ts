@@ -1,3 +1,4 @@
+import { PaletteColourField as PaletteColourField_770df68910fda99f0e15775ab6218cb0 } from '../../../components/cms/PaletteColourField'
 import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
 import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
 import { LexicalDiffComponent as LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
@@ -33,11 +34,13 @@ import { Logout as Logout_ea982ea2ef69a2c08aaf022abc0d0f98 } from '../../../comp
 import { PhotographsView as PhotographsView_345748d9c32fb4658c8b57d96647ae24 } from '../../../components/cms/PhotographsView'
 import { PreviewView as PreviewView_345748d9c32fb4658c8b57d96647ae24 } from '../../../components/cms/PhotographsView'
 import { ProjectPreview as ProjectPreview_88956df27fe529ad82e08e252e582d2d } from '../../../components/cms/ProjectPreview'
+import { VideoPagePreview as VideoPagePreview_657a5a5da78dee21238e0ead23065457 } from '../../../components/cms/VideoPagePreview'
 import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
 import { S3ClientUploadHandler as S3ClientUploadHandler_f97aa6c64367fa259c5bc0567239ef24 } from '@payloadcms/storage-s3/client'
 
 /** @type import('payload').ImportMap */
 export const importMap = {
+  "/components/cms/PaletteColourField#PaletteColourField": PaletteColourField_770df68910fda99f0e15775ab6218cb0,
   "@payloadcms/richtext-lexical/rsc#RscEntryLexicalCell": RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e,
   "@payloadcms/richtext-lexical/rsc#RscEntryLexicalField": RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e,
   "@payloadcms/richtext-lexical/rsc#LexicalDiffComponent": LexicalDiffComponent_44fe37237e0ebf4470c9990d8cb7b07e,
@@ -73,6 +76,7 @@ export const importMap = {
   "/components/cms/PhotographsView#PhotographsView": PhotographsView_345748d9c32fb4658c8b57d96647ae24,
   "/components/cms/PhotographsView#PreviewView": PreviewView_345748d9c32fb4658c8b57d96647ae24,
   "/components/cms/ProjectPreview#ProjectPreview": ProjectPreview_88956df27fe529ad82e08e252e582d2d,
+  "/components/cms/VideoPagePreview#VideoPagePreview": VideoPagePreview_657a5a5da78dee21238e0ead23065457,
   "@payloadcms/next/rsc#CollectionCards": CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1,
   "@payloadcms/storage-s3/client#S3ClientUploadHandler": S3ClientUploadHandler_f97aa6c64367fa259c5bc0567239ef24
 }

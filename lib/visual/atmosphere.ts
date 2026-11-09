@@ -1,3 +1,5 @@
+import { colourContrast, paletteInk, type PagePalette } from "../site/page-palette";
+
 export type AtmospherePreset = "home" | "journal" | "video" | "fashion";
 
 type AtmosphereProfile = {
@@ -6,6 +8,23 @@ type AtmosphereProfile = {
   washOpacity: number;
   accentOpacity: number;
 };
+
+export function atmosphereProfile(preset: AtmospherePreset, palette: PagePalette | null = null): AtmosphereProfile {
+  if (!palette) return ATMOSPHERE_PROFILES[preset];
+  const ink = paletteInk(palette.background);
+  const contrast = colourContrast(ink, palette.background);
+  const tint = (colour: string) => {
+    let strength = .18;
+    for (let attempt = 0; attempt < 8; attempt++, strength /= 2) {
+      const mixed = "#" + [1, 3, 5].map(offset => Math.round(parseInt(palette.background.slice(offset, offset + 2), 16) * (1 - strength) + parseInt(colour.slice(offset, offset + 2), 16) * strength).toString(16).padStart(2, "0")).join("");
+      if (colourContrast(ink, mixed) >= Math.min(contrast, 4.65)) return mixed;
+    }
+    return palette.background;
+  };
+  const a = tint(palette.colourA), b = tint(palette.colourB), accent = tint(palette.accent);
+  // Bound decorative washes to the reading ground; custom point lights are off.
+  return { background: palette.background, colours: [a, b, a, b, a, accent, accent], washOpacity: .6, accentOpacity: .3 };
+}
 
 // The first five colours carry the field; cobalt and yellow are small, intermittent
 // interruptions, never full-page washes. Journal retains its warm reading ground.
@@ -57,8 +76,8 @@ export function atmosphereField(index: number, seconds: number, reducedMotion: b
 }
 
 /** A plain gradient fallback, not a substitute claiming to reproduce WebGL grain. */
-export function atmosphereFallback(preset: AtmospherePreset): string {
-  const profile = ATMOSPHERE_PROFILES[preset];
+export function atmosphereFallback(preset: AtmospherePreset, palette: PagePalette | null = null): string {
+  const profile = atmosphereProfile(preset, palette);
   return profile.colours.slice(0, 5).map((hex, index) => {
     const field = atmosphereField(index, 0, true);
     const alpha = Math.round(profile.washOpacity * 255).toString(16).padStart(2, "0");

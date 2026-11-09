@@ -12,6 +12,20 @@ explicitly disabled. See
 preservation, cleanup and remaining editorial/provider gates. Scoped history below
 describes the earlier releases, not the current full-site layout.
 
+**Page customization rollout (2026-11-09):** Journal posts and Fashion projects
+now support individual background/atmosphere/accent palettes. The homepage's bottom
+containers are transparent, with small readability backings retained on controls
+and text. Videos support click-to-load YouTube or uploaded-film playback on the
+index and detail pages; Site settings controls the Video heading, intro, featured
+film and manual order. Native drafts, previews, versions and explicit publishing
+remain in use. After explicit owner approval, the additive
+`20261109_120000_page_customization` migration was applied in production following
+a fresh backup and populated-data rehearsal, before the authorized `main` push;
+no existing content is automatically recoloured or converted to embeds. See
+[`docs/page-customization.md`](docs/page-customization.md) for authoring, verification
+and remaining live-provider acceptance. Migration preservation and release scope
+are recorded in [`docs/page-customization-rollout-20261109.md`](docs/page-customization-rollout-20261109.md).
+
 **Production content intake (2026-11-06):** the scoped Video/Fashion release is
 live, with eight new public photographs (16 total), 11 private Fashion images and
 eight private film images attached to drafts in the native CMS. The subsequently
@@ -45,11 +59,21 @@ CMS destinations. It does not upload or publish. See
 [`docs/adobe-portfolio-intake.md`](docs/adobe-portfolio-intake.md) for commands,
 duplicate-review limits and the separate CMS/publication gates.
 
-The separately authorized 2026-11-07 API intake added **25 verified private Media
-items and nine private drafts**, preserving existing content and publishing nothing.
-Photography, unassigned assets and missing YouTube originals remain separate gates;
-the intake document records verification, corrected gallery ordering and temporary
-API-session revocation.
+The 2026-11-07 API intake first added 25 verified private Media items and nine
+private drafts. After separate owner approval, **five completed entries and 78
+photographs were published**, bringing `/photos` to **94 photographs**. Existing
+content/palettes/settings were preserved; newsletter stayed disabled. A subsequent
+owner clarification published the four remaining imported Video entries with
+outbound YouTube links (not embedded/rehosted originals), and added **11 images and
+two distinct clips to private Journal Media**. Six already-owned cover compositions
+and one identical background clip copy were not uploaded again. No Journal post or
+homepage placement was created. The intake document records duplicate/hash/browser
+checks and API-session revocation.
+
+On current Storage v1.14.6, signed TUS upload is not accepted. This API intake used
+native prepare → standard signed PUT (`upsert: false`) → native sample/publish,
+without changing permissions or providers. The ordinary Supabase browser TUS path
+still needs a separately scoped compatibility fix; see the intake document.
 
 Use Node **24.22.1** (`.nvmrc`; Payload also supports `^22.23.4`), then run `npm install` and `npm run dev`. Open the local URL shown in the terminal. The deployed site has a separate homepage at `/` and the photography archive at `/photos`; existing `/photos/<filename>` links are unchanged. An empty catalogue produces explicit empty states rather than presenting `public/test-image.jpg` as published work; that existing asset is retained for local synthetic fixtures.
 

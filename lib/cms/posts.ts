@@ -4,6 +4,8 @@ import { APIError, ValidationError, type CollectionBeforeOperationHook, type Col
 import { isCmsUser } from "./auth";
 import { contentMedia } from "./content";
 import { hasText } from "@payloadcms/richtext-lexical/shared";
+import { siteExpansionEnabled } from "./site-access";
+import { mergePagePalette, pagePaletteField, validatePagePalette } from "./page-palette";
 
 const WRITE = Symbol("native journal write");
 type Current = { edit_revision: number; first_published_at: string | null; slug: string };
@@ -65,6 +67,12 @@ const beforeChange: CollectionBeforeChangeHook = async ({ data, originalDoc, req
   // saved props. Actual autosaves, Publish and Restore do advance the token.
   data.editRevision = (current?.edit_revision ?? 0) + (write.statusOnly ? 0 : 1);
   const body = data.body ?? originalDoc?.body;
+  if (siteExpansionEnabled()) {
+    const palette = mergePagePalette(originalDoc?.palette, data.palette);
+    if (data.palette !== undefined) data.palette = palette;
+    const validation = validatePagePalette(palette);
+    if (data._status === "published" && !write.restoring && validation !== true) throw new ValidationError({ collection: "posts", errors: [{ path: "palette", message: validation }], req });
+  }
   try {
     data.mediaReferences = body ? contentMedia(body) : [];
     if (data._status === "published" && !write.restoring) {
@@ -98,6 +106,7 @@ export const Posts: CollectionConfig = {
   versions: { drafts: { autosave: { interval: 1500 } }, maxPerDoc: 0 },
   hooks: { beforeOperation: [beforeOperation], beforeChange: [beforeChange] },
   fields: [
+    ...(siteExpansionEnabled() ? [pagePaletteField()] : []),
     { name: "title", type: "text", required: true, maxLength: 200, defaultValue: "Untitled" },
     { name: "slug", type: "text", required: true, unique: true, index: true, maxLength: 100,
       validate: (value: string | null | undefined) => !value || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) || "Use lowercase letters, numbers and hyphens.",

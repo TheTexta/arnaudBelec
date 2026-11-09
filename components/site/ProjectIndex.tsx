@@ -1,15 +1,20 @@
 import Link from "next/link";
-import type { ProjectKind, PublicProject } from "@/lib/site/types";
+import type { ProjectKind, PublicProject, VideoPageSettings } from "@/lib/site/types";
+import { ProjectPlayback } from "./ProjectPlayback";
 import { ProjectMedia } from "./ProjectMedia";
+import { arrangeVideos } from "@/lib/site/video-page";
 import "./site.css";
 
-export function ProjectIndex({ kind, projects }: { kind: ProjectKind; projects: PublicProject[] }) {
-  const title = kind === "video" ? "Video" : "Fashion";
+export function ProjectIndex({ kind, projects, videoPage }: { kind: ProjectKind; projects: PublicProject[]; videoPage?: VideoPageSettings }) {
+  const title = kind === "video" ? videoPage?.heading || "Video" : "Fashion";
+  const ordered = kind === "video" && videoPage ? arrangeVideos(projects, videoPage) : projects;
   return <main className={`site-project-index site-project-index--${kind}`}>
     <h1>{title}</h1>
-    {projects.length ? <div className="site-project-list">
-      {projects.map((project, index) => <article className="site-project-entry" key={project.id}>
-        {project.cover ? <ProjectMedia media={project.cover} eager={index === 0} href={`/${kind}/${encodeURIComponent(project.slug)}`} linkLabel={`View ${project.title}`} /> : null}
+    {kind === "video" && videoPage?.intro ? <p className="site-video-intro">{videoPage.intro}</p> : null}
+    {ordered.length ? <div className="site-project-list">
+      {ordered.map((project, index) => <article className={`site-project-entry${kind === "video" && project.id === videoPage?.featuredVideoId ? " site-project-entry--featured" : ""}`} key={project.id}>
+        {kind === "video" && project.id === videoPage?.featuredVideoId ? <p className="site-featured-label">Featured film</p> : null}
+        {kind === "video" ? <ProjectPlayback project={project} eager={index === 0} coverHref={`/${kind}/${encodeURIComponent(project.slug)}`} /> : project.cover ? <ProjectMedia media={project.cover} eager={index === 0} href={`/fashion/${encodeURIComponent(project.slug)}`} linkLabel={`View ${project.title}`} /> : null}
         <Link className="site-project-link" href={`/${kind}/${encodeURIComponent(project.slug)}`}>
           <div className="site-project-heading"><h2>{project.title}</h2>{project.year ? <span>{project.year}</span> : null}</div>
         </Link>

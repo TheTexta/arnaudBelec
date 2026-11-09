@@ -73,6 +73,7 @@ for (const port of [3111, 55446, 55447]) {
 const { up: expansionUp } = await import("../../migrations/20261104_120000_site_expansion");
 const { up: categoriesUp } = await import("../../migrations/20261104_110000_portfolio_categories");
 const { up: homepageUp } = await import("../../migrations/20261105_120000_homepage");
+const { up: customizationUp } = await import("../../migrations/20261109_120000_page_customization");
 const image = await readFile(new URL("../../public/test-image.jpg", import.meta.url));
 const dimensions = await sharp(image).metadata();
 if (!dimensions.width || !dimensions.height) throw new Error("Local test-image dimensions are required.");
@@ -95,7 +96,7 @@ const payload = await getPayload({ config });
 (payload.db.pool as unknown as { _clients: { release: () => void }[] })._clients[0].release();
 await payload.db.drizzle.transaction(async db => {
   await db.execute(sql`set local role arnaud_cms_migrator`);
-  for (const migrate of [up, historyUp, nativeUp, categoriesUp, expansionUp, homepageUp]) await migrate({ db } as unknown as Parameters<typeof up>[0]);
+  for (const migrate of [up, historyUp, nativeUp, categoriesUp, expansionUp, homepageUp, customizationUp]) await migrate({ db } as unknown as Parameters<typeof up>[0]);
 });
 await payload.db.pool.end();
 process.env.ARNAUD_CMS_DATABASE_URL = "postgresql://arnaud_cms_runtime:local-fixture-only@127.0.0.1:55447/postgres";
@@ -130,20 +131,29 @@ const body = (text: string, media: string[] = []): Post["body"] => ({ root: { ty
   { type: "paragraph", version: 1, direction: null, format: "", indent: 0, children: [{ type: "text", version: 1, text, format: 0, detail: 0, mode: "normal", style: "" }] },
   ...media.map(id => ({ type: "upload", version: 3, relationTo: "media", value: id, fields: {} })),
 ] } });
-await payload.create({ collection: "posts", user, overrideAccess: false, data: { title: "Synthetic journal study", slug: "synthetic-journal-study", editRevision: 0, excerpt: "Local journal readability fixture.", body: body("This synthetic journal entry checks readable editorial content without publishing any real work.", [mediaIds[0]]), _status: "published" } });
+const fixturePalette = { mode: "custom" as const, background: "#19232f", colourA: "#dcb2bd", colourB: "#dfd79c", accent: "#a8cce6" };
+await payload.create({ collection: "posts", user, overrideAccess: false, data: { title: "Synthetic journal study", slug: "synthetic-journal-study", editRevision: 0, excerpt: "Local journal readability fixture.", body: body("This synthetic journal entry checks readable editorial content without publishing any real work.", [mediaIds[0]]), palette: fixturePalette, _status: "published" } });
 await payload.create({ collection: "posts", user, overrideAccess: false, draft: true, data: { title: "Private synthetic journal", slug: "private-synthetic-journal", body: body("This must remain private."), _status: "draft" } });
 // Project/global field contracts are the actual expansion collections, not mocks.
+let uploadedVideoId = "";
 for (const collection of ["videos", "fashion-projects"] as const) {
-  await payload.create({ collection, user, overrideAccess: false, data: {
+  const project = await payload.create({ collection, user, overrideAccess: false, data: {
     title: collection === "videos" ? "Synthetic film study" : "Synthetic garment study",
     slug: collection === "videos" ? "synthetic-film-study" : "synthetic-garment-study",
     excerpt: "Synthetic local acceptance content, not published portfolio work.", body: body("A synthetic project for local browser verification."),
     cover: mediaIds[0], film: collection === "videos" ? mediaIds[2] : undefined,
+    ...(collection === "fashion-projects" ? { palette: fixturePalette } : {}),
     gallery: [mediaIds[0], mediaIds[1]], turntableFrames: collection === "fashion-projects" ? [mediaIds[0], mediaIds[1]] : undefined,
     year: "2026", credits: "Local synthetic fixture", editRevision: 0, _status: "published",
   } });
+  if (collection === "videos") uploadedVideoId = project.id;
   await payload.create({ collection, user, overrideAccess: false, draft: true, data: { title: "Private synthetic project", slug: `private-synthetic-${collection}`, body: body("Private."), _status: "draft" } });
 }
+const youtubeVideo = await payload.create({ collection: "videos", user, overrideAccess: false, data: {
+  title: "Synthetic YouTube source study", slug: "synthetic-youtube-study", editRevision: 0,
+  excerpt: "Synthetic local embed fixture; no provider request occurs until explicit playback.",
+  videoSource: "youtube", youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", _status: "published",
+} });
 if (localFashion) await payload.create({ collection: "fashion-projects", user, overrideAccess: false, data: {
   title: localFashion.project.title, slug: localFashion.project.slug, excerpt: localFashion.project.excerpt, year: localFashion.project.year,
   body: body(""), cover: localFashionFiles.get(localFashion.coverFilename)!.id,
@@ -155,6 +165,7 @@ if (localFashion) await payload.create({ collection: "fashion-projects", user, o
 await payload.updateGlobal({ slug: "site-settings", user, overrideAccess: false, data: {
   intro: "Synthetic local portfolio studies. No real editorial content is shown.", contactEmail: "fixture@example.test",
   featuredPhotoId: photoIds[0], ambientAudio: mediaIds[3],
+  videoPage: { heading: "Synthetic films", intro: "Local-only landing-page configuration fixture.", featuredVideo: youtubeVideo.id, orderedVideos: [{ video: uploadedVideoId }, { video: youtubeVideo.id }] },
   homepage: {
     palette: { fluidA: "#ff278f", fluidB: "#ffe52f", background: "#c8e6ff" },
     photography: { source: "media", image: mediaIds[0] }, journal: { source: "media", image: mediaIds[1] },

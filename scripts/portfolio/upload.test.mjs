@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { descriptions, document, journalBody, linkedParagraph } from "./editorial.mjs";
-import { draftData, parsedSourceBundle, reconcileRegisteredReceipt, requireNoPendingReceipt, verifyDraftContent, verifyRecordedDraft } from "./upload.mjs";
+import { draftData, parsedSourceBundle, reconcileRegisteredReceipt, requireNoPendingReceipt, validateUploadScope, verifyDraftContent, verifyRecordedDraft } from "./upload.mjs";
 
 test("Journal source order, text and repeated image placement are retained", () => {
   const page = { texts: [{ offset: 1, text: "Exact caption\nExact credit" }], images: [{ id: "a", offset: 2 }, { id: "a", offset: 3 }], links: [] };
@@ -82,4 +82,13 @@ test("reparsing frozen snapshots also replaces obsolete template-inclusive mappi
     assert.equal(source.pages[0].images.length, 1);
     assert.deepEqual(source.assets[0].placements, [{ page: "/fotos", group: "street-photography", order: 1, role: "content" }]);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("unassigned Media intake is library-only, bounded and unique; the original profile stays separate", () => {
+  const plan = { scope: "unassigned-journal-media-only", drafts: [], media: [{ bundle: "images", group: "placement-review", sha256: "one" }, { bundle: "videos", group: "placement-review", sha256: "two" }] };
+  validateUploadScope(plan);
+  assert.throws(() => validateUploadScope({ ...plan, drafts: [{ collection: "posts" }] }));
+  assert.throws(() => validateUploadScope({ ...plan, media: [...plan.media, plan.media[0]] }));
+  assert.throws(() => validateUploadScope({ ...plan, media: [{ ...plan.media[0], group: "phassion" }] }));
+  assert.throws(() => validateUploadScope({ ...plan, scope: undefined }));
 });

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ATMOSPHERE_PROFILES, atmosphereFallback, type AtmospherePreset } from "../../lib/visual/atmosphere";
+import { atmosphereProfile, atmosphereFallback, type AtmospherePreset } from "../../lib/visual/atmosphere";
+import type { PagePalette } from "../../lib/site/page-palette";
 import type { createAtmosphereRenderer } from "./atmosphere-renderer";
 import "./public-atmosphere.css";
 
-export function PublicAtmosphere({ preset, className = "" }: { preset: AtmospherePreset; className?: string }) {
+export function PublicAtmosphere({ preset, palette = null, className = "" }: { preset: AtmospherePreset; palette?: PagePalette | null; className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -89,7 +90,7 @@ export function PublicAtmosphere({ preset, className = "" }: { preset: Atmospher
     // No Three.js in the initial component chunk. CSS is usable before it arrives.
     void import("./atmosphere-renderer").then(({ createAtmosphereRenderer }) => {
       if (cancelled) return;
-      renderer = createAtmosphereRenderer(canvas, preset);
+      renderer = createAtmosphereRenderer(canvas, preset, palette);
       schedule();
     }).catch(fallback);
 
@@ -109,14 +110,14 @@ export function PublicAtmosphere({ preset, className = "" }: { preset: Atmospher
       renderer?.dispose();
       fallback();
     };
-  }, [preset]);
+  }, [preset, palette]);
 
   return (
     <div
       className={`public-atmosphere ${className}`}
       aria-hidden="true"
       inert
-      style={{ backgroundColor: ATMOSPHERE_PROFILES[preset].background, backgroundImage: atmosphereFallback(preset) }}
+      style={{ backgroundColor: atmosphereProfile(preset, palette).background, backgroundImage: atmosphereFallback(preset, palette) }}
     >
       <canvas ref={canvasRef} />
     </div>

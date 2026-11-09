@@ -11,6 +11,7 @@ import { up as nativeUp } from "../../migrations/20261102_200000_native_journal"
 import { up as expansionUp } from "../../migrations/20261104_120000_site_expansion";
 import { up as categoriesUp } from "../../migrations/20261104_110000_portfolio_categories";
 import { up as homepageUp } from "../../migrations/20261105_120000_homepage";
+import { up as customizationUp } from "../../migrations/20261109_120000_page_customization";
 import type { Post } from "../../payload-types";
 import { newsletterConfigured } from "./config";
 import { dispatchBatch } from "./dispatch";
@@ -48,7 +49,7 @@ test("generated newsletter schema and native publication transaction under priva
     assert.ok(config.collections.find(item => item.slug === "posts")!.hooks.afterChange.includes(queuePostAnnouncement));
     const cms = payload = await getPayload({ key: "newsletter-native-integration", config });
     (cms.db.pool as unknown as { _clients: { release: () => void }[] })._clients[0].release();
-    for (const up of [baselineUp, historyUp, nativeUp, categoriesUp, expansionUp, homepageUp]) await cms.db.drizzle.transaction(async db => {
+    for (const up of [baselineUp, historyUp, nativeUp, categoriesUp, expansionUp, homepageUp, customizationUp]) await cms.db.drizzle.transaction(async db => {
       await db.execute(sql`set local role arnaud_cms_migrator`);
       await up({ db } as unknown as MigrateUpArgs);
     });

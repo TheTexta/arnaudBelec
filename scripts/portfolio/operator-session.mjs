@@ -39,6 +39,13 @@ async function authClients(marker = null) {
   return { admin: createClient(supabaseOrigin, service, options), client: createClient(supabaseOrigin, anon, options) };
 }
 
+export async function publicStorageConfiguration() {
+  // Read only the current public/anon configuration; keep it out of logs/artifacts.
+  const anonKey = (await ssh(["docker", "exec", "supabase-kong-qvorfovjsiinni7o8azmlluz", "printenv", "SUPABASE_ANON_KEY"])).trim();
+  assert.ok(anonKey, "Public Storage configuration unavailable.");
+  return { url: supabaseOrigin, anonKey };
+}
+
 export async function importSession(directory) {
   const session = JSON.parse(await readFile(join(directory, "session.private.json"), "utf8"));
   assert.ok(uuid(session.userId) && uuid(session.sessionId) && session.expiresAt > Date.now() / 1000 + 300, "Temporary session needs renewal or reconciliation.");

@@ -4,6 +4,8 @@ import { hasText } from "@payloadcms/richtext-lexical/shared";
 import { APIError, ValidationError, type CollectionConfig, type CollectionBeforeOperationHook, type CollectionBeforeChangeHook, type PayloadRequest } from "payload";
 import { isCmsUser } from "./auth";
 import { contentMedia } from "./content";
+import { canonicalYoutubeUrl, effectiveVideoSource, youtubeVideoId } from "../media/youtube";
+import { mergePagePalette, pagePaletteField, validatePagePalette } from "./page-palette";
 import { mediaId, requireSiteExpansion, siteAdmin, siteExpansionEnabled, siteRead, validateSiteMedia, type MediaUse } from "./site-access";
 
 const WRITE = Symbol("native project write");
@@ -23,9 +25,10 @@ export function editRevision(value: unknown) {
   return revision;
 }
 
-export function projectMediaUses(data: Record<string, unknown>): MediaUse[] {
+export function projectMediaUses(data: Record<string, unknown>, collection?: "videos" | "fashion-projects"): MediaUse[] {
   const uses: MediaUse[] = [];
   for (const [field, kind] of [["cover", "image"], ["film", "video"], ["gallery", "image"], ["turntableFrames", "image"]] as const) {
+    if (field === "film" && collection !== "fashion-projects" && effectiveVideoSource(data.videoSource, Boolean(data.film)) !== "upload") continue;
     const values = Array.isArray(data[field]) ? data[field] as unknown[] : [data[field]];
     for (const value of values) {
       if (value == null || value === "") continue;
@@ -79,9 +82,21 @@ function projectCollection(slug: "videos" | "fashion-projects"): CollectionConfi
     data.editRevision = (current?.edit_revision ?? 0) + (write.statusOnly ? 0 : 1);
     try {
       const merged = { ...originalDoc, ...data };
-      const uses = projectMediaUses(merged);
+      if (slug === "fashion-projects") {
+        merged.palette = mergePagePalette(originalDoc?.palette, data.palette);
+        if (data.palette !== undefined) data.palette = merged.palette;
+        const validation = validatePagePalette(merged.palette);
+        if (publishing && validation !== true) throw new ValidationError({ collection: slug, errors: [{ path: "palette", message: validation }], req });
+      } else {
+        const source = effectiveVideoSource(merged.videoSource, Boolean(merged.film));
+        if (publishing && (merged.videoSource != null && !["upload", "youtube", "none"].includes(merged.videoSource))) throw new APIError("Choose Upload, YouTube or None as the primary video source.", 400);
+        if (publishing && source === "upload" && !mediaId(merged.film)) throw new APIError("Select a verified primary film before publishing.", 400);
+        if (publishing && source === "youtube" && !youtubeVideoId(merged.youtubeUrl)) throw new APIError("Enter a valid YouTube URL or video ID before publishing.", 400);
+        if (data.youtubeUrl && canonicalYoutubeUrl(data.youtubeUrl)) data.youtubeUrl = canonicalYoutubeUrl(data.youtubeUrl);
+      }
+      const uses = projectMediaUses(merged, slug);
       data.mediaReferences = await validateSiteMedia(req, uses, publishing);
-      if (publishing && !uses.length && (!merged.body || !hasText(merged.body))) throw new APIError("Add text or verified media before publishing.", 400);
+      if (publishing && !uses.length && (!merged.body || !hasText(merged.body)) && !(slug === "videos" && effectiveVideoSource(merged.videoSource, Boolean(merged.film)) === "youtube" && youtubeVideoId(merged.youtubeUrl))) throw new APIError("Add text or verified media before publishing.", 400);
     } catch (error) {
       if (!(error instanceof APIError) || error.status !== 400) throw error;
       throw new ValidationError({ collection: slug, errors: [{ path: "body", message: (error as Error).message }], req });
@@ -110,7 +125,11 @@ function projectCollection(slug: "videos" | "fashion-projects"): CollectionConfi
       { name: "excerpt", type: "textarea", maxLength: 500 },
       { name: "body", type: "richText" },
       { name: "cover", type: "upload", relationTo: "media", filterOptions: { mimeType: { contains: "image/" } } },
-      { name: "film", type: "upload", relationTo: "media", filterOptions: { mimeType: { contains: "video/" } } },
+      ...(slug === "fashion-projects" ? [pagePaletteField()] : [
+        { name: "videoSource", type: "select" as const, options: [{ label: "Uploaded film", value: "upload" }, { label: "YouTube", value: "youtube" }, { label: "None", value: "none" }], admin: { description: "Blank preserves legacy behavior: use the uploaded film when present, otherwise none. Switching source never deletes the original film." } },
+        { name: "youtubeUrl", label: "YouTube URL or video ID", type: "text" as const, maxLength: 2048, admin: { condition: (_data: unknown, siblings: Record<string, unknown>) => siblings?.videoSource === "youtube" } },
+      ]),
+      { name: "film", type: "upload", relationTo: "media", filterOptions: { mimeType: { contains: "video/" } }, admin: slug === "videos" ? { condition: (_data, siblings) => effectiveVideoSource(siblings?.videoSource, Boolean(siblings?.film)) === "upload" || siblings?.videoSource == null } : undefined },
       { name: "gallery", type: "upload", relationTo: "media", hasMany: true, filterOptions: { mimeType: { contains: "image/" } } },
       { name: "turntableFrames", type: "upload", relationTo: "media", hasMany: true, filterOptions: { mimeType: { contains: "image/" } }, admin: { description: "Frames play in this order." } },
       { name: "credits", type: "textarea", maxLength: 5000 },

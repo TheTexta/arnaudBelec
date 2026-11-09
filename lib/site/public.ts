@@ -4,6 +4,8 @@ import { getCms } from "../cms/client";
 import { projectCollections, siteExpansionEnabled } from "../cms/site-access";
 import { defaultSiteSettings, type ProjectKind, type PublicMedia, type PublicProject, type SiteSettings } from "./types";
 import { HOME_SECTIONS, defaultHomepage, homePalette } from "./homepage";
+import { pagePalette } from "./page-palette";
+import { effectiveVideoSource, youtubeVideoId } from "../media/youtube";
 
 type Raw = Record<string, unknown>;
 const text = (value: unknown) => typeof value === "string" ? value : "";
@@ -34,23 +36,34 @@ function publicBody(value: unknown): PublicProject["body"] {
 
 export function toPublicProject(value: unknown, kind: ProjectKind): PublicProject {
   const raw = object(value);
+  const source = effectiveVideoSource(raw.videoSource, Boolean(raw.film));
   return {
     id: text(raw.id), kind, title: text(raw.title), slug: text(raw.slug), excerpt: text(raw.excerpt),
     body: publicBody(raw.body),
-    cover: toPublicMedia(raw.cover), film: toPublicMedia(raw.film), gallery: mediaList(raw.gallery), turntableFrames: mediaList(raw.turntableFrames),
+    cover: toPublicMedia(raw.cover), film: kind !== "video" || source === "upload" ? toPublicMedia(raw.film) : null,
+    videoSource: kind === "video" ? source : "none", youtubeId: kind === "video" && source === "youtube" ? youtubeVideoId(raw.youtubeUrl) : null,
+    palette: kind === "fashion" ? pagePalette(raw.palette) : null,
+    gallery: mediaList(raw.gallery), turntableFrames: mediaList(raw.turntableFrames),
     credits: text(raw.credits), year: text(raw.year), firstPublishedAt: text(raw.firstPublishedAt) || null,
   };
 }
 
-export async function getPublicProjects(kind: ProjectKind): Promise<PublicProject[]> {
+export async function getPublicProjects(kind: ProjectKind, selectedVideoIds: string[] = []): Promise<PublicProject[]> {
   if (!siteExpansionEnabled()) return [];
   const cms = await getCms();
+  const select = { title: true, slug: true, excerpt: true, cover: true, year: true, firstPublishedAt: true, ...(kind === "video" ? { film: true as const, videoSource: true as const, youtubeUrl: true as const } : {}) } as const;
   const result = await cms.find({
     collection: projectCollections[kind] as CollectionSlug, draft: false, overrideAccess: false, user: null,
     where: { _status: { equals: "published" } }, sort: "-firstPublishedAt,-id", limit: 100, depth: 1,
-    select: { title: true, slug: true, excerpt: true, cover: true, year: true, firstPublishedAt: true },
+    select,
   });
-  return result.docs.map(doc => toPublicProject(doc, kind));
+  const projects = result.docs.map(doc => toPublicProject(doc, kind));
+  const missing = kind === "video" ? [...new Set(selectedVideoIds)].slice(0, 101).filter(id => !projects.some(project => project.id === id)) : [];
+  if (missing.length) {
+    const selected = await cms.find({ collection: "videos", draft: false, overrideAccess: false, user: null, where: { and: [{ id: { in: missing } }, { _status: { equals: "published" } }] }, limit: 101, depth: 1, select });
+    projects.push(...selected.docs.map(doc => toPublicProject(doc, kind)));
+  }
+  return projects;
 }
 
 export async function getPublicProject(kind: ProjectKind, slug: string): Promise<PublicProject | null> {
@@ -66,6 +79,8 @@ export async function getPublicProject(kind: ProjectKind, slug: string): Promise
 export function toPublicSiteSettings(value: unknown): SiteSettings {
   const raw = object(value);
   const home = object(raw.homepage);
+  const video = object(raw.videoPage);
+  const relationshipId = (value: unknown) => typeof value === "string" ? value : text(object(value).id);
   const homepage = defaultHomepage();
   homepage.palette = homePalette(home.palette);
   for (const { key } of HOME_SECTIONS) {
@@ -77,6 +92,11 @@ export function toPublicSiteSettings(value: unknown): SiteSettings {
   const photoIds = (value: unknown) => Array.isArray(value) ? [...new Set(value.map(item => text(object(item).photographId)).filter(Boolean))] : [];
   return {
     homepage,
+    videoPage: {
+      heading: text(video.heading).trim() || "Video", intro: text(video.intro),
+      featuredVideoId: relationshipId(video.featuredVideo) || null,
+      orderedVideoIds: Array.isArray(video.orderedVideos) ? [...new Set(video.orderedVideos.slice(0, 100).map(item => relationshipId(object(item).video)).filter(Boolean))] : [],
+    },
     intro: typeof raw.intro === "string" ? raw.intro : defaultSiteSettings.intro,
     contactEmail: typeof raw.contactEmail === "string" ? raw.contactEmail : defaultSiteSettings.contactEmail,
     socialLinks: Array.isArray(raw.socialLinks) ? raw.socialLinks.map(item => ({ label: text(object(item).label), url: text(object(item).url) })) : [],

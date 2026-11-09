@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { HomeEntrance } from "@/components/site/HomeEntrance";
 import { getPublicSiteSettings } from "@/lib/site/public";
 import { loadPublicPhotographs } from "@/lib/supabase-public";
+import { PublicSiteFrame } from "@/components/site/PublicSiteFrame";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +14,5 @@ export const metadata: Metadata = {
 
 export default async function Page() {
   const [photographs, settings] = await Promise.all([loadPublicPhotographs(), getPublicSiteSettings()]);
-  return <HomeEntrance photographs={photographs} settings={settings} />;
+  return <PublicSiteFrame><HomeEntrance photographs={photographs} settings={settings} /></PublicSiteFrame>;
 }

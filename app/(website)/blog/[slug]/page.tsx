@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { publishedPost } from "@/lib/blog/public";
 import BlogContent from "@/app/blog/content";
+import { PublicSiteFrame } from "@/components/site/PublicSiteFrame";
+import { pagePalette } from "@/lib/site/page-palette";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -16,8 +18,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PostPage({ params }: Props) {
   const post = await publishedPost((await params).slug);
   if (!post) notFound();
-  return <article className="journal-article">
+  return <PublicSiteFrame palette={pagePalette(post.palette)}><main className="journal-shell"><article className="journal-article">
     <header><Link className="blog-muted" href="/blog">Back to journal</Link><p className="journal-date" style={{ marginTop: 32 }}><time dateTime={post.firstPublishedAt ?? post.updatedAt}>{new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(new Date(post.firstPublishedAt ?? post.updatedAt))}</time></p><h1>{post.title}</h1>{post.excerpt ? <p className="journal-deck">{post.excerpt}</p> : null}</header>
     <BlogContent body={post.body} />
-  </article>;
+  </article></main></PublicSiteFrame>;
 }

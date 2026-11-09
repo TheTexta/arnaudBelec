@@ -7,7 +7,7 @@ import type { PublicMedia, PublicProject } from "@/lib/site/types";
 // Keep Next's link/CSS bundler interop out of Node; browser checks use real Next.
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier.endsWith(".css")) return { url: "data:text/javascript,export default {};", shortCircuit: true };
+    if (specifier.endsWith(".css")) return { url: "data:text/javascript,export default new Proxy({}, {get:(_, key)=>key});", shortCircuit: true };
     if (specifier === "next/link") return {
       url: `data:text/javascript,${encodeURIComponent(`import { createElement } from ${JSON.stringify(import.meta.resolve("react"))}; export default function Link({children, ...props}) { return createElement("a", props, children); }`)}`,
       shortCircuit: true,
@@ -16,6 +16,7 @@ const hooks = registerHooks({
   },
 });
 const { ProjectDetail } = await import("./ProjectDetail");
+const { ProjectIndex } = await import("./ProjectIndex");
 hooks.deregister();
 
 const images: PublicMedia[] = Array.from({ length: 10 }, (_, index) => ({
@@ -28,6 +29,7 @@ const project: PublicProject = {
   excerpt: "An exact project introduction with its collaboration credit.",
   body: { root: { type: "root", direction: null, format: "", indent: 0, version: 1, children: [] } },
   cover: images[0], film: null, gallery: images.slice(1), turntableFrames: [], credits: "", year: "2025", firstPublishedAt: null,
+  palette: null, videoSource: "none", youtubeId: null,
 };
 
 test("Fashion introduction appears once, before its first photograph", () => {
@@ -63,12 +65,33 @@ test("Fashion private preview retains its explicit unpublished notice and projec
 
 test("Video preserves native playback and its introduction after the film", () => {
   const film = { ...images[0], mimeType: "video/mp4", filename: "fixture.mp4", url: "/api/cms/media/file/fixture.mp4" };
-  const html = renderToStaticMarkup(<ProjectDetail project={{ ...project, kind: "video", film }} />);
+  const html = renderToStaticMarkup(<ProjectDetail project={{ ...project, kind: "video", videoSource: "upload", film }} />);
   assert.ok(html.indexOf("<video") < html.indexOf(project.excerpt));
   assert.equal(html.split(project.excerpt).length - 1, 1);
   assert.match(html, /controls=""/);
   assert.match(html, /href="\/video"/);
   assert.ok(!html.includes("site-project-detail--fashion"));
+});
+
+test("YouTube appears click-to-load on both film routes without remote thumbnails or inactive films", () => {
+  const video: PublicProject = { ...project, kind: "video", videoSource: "youtube", youtubeId: "abcdefghijk", film: null };
+  for (const html of [renderToStaticMarkup(<ProjectDetail project={video} />), renderToStaticMarkup(<ProjectIndex kind="video" projects={[video]} />)]) {
+    assert.match(html, /Play video/);
+    assert.match(html, /Watch on YouTube/);
+    assert.doesNotMatch(html, /<iframe|<script|ytimg|<video/);
+    assert.match(html, /src="\/api\/cms\/media\/file\/fixture-1.jpg"/);
+  }
+});
+
+test("Video landing applies CMS copy, puts featured first and deduplicates manual selection", () => {
+  const videos: PublicProject[] = ["first", "second", "third"].map(id => ({ ...project, kind: "video", id, title: `${id} film`, slug: id, cover: null, gallery: [] }));
+  const html = renderToStaticMarkup(<ProjectIndex kind="video" projects={videos} videoPage={{ heading: "Selected films", intro: "An exact introduction.", featuredVideoId: "second", orderedVideoIds: ["first", "second", "missing-draft"] }} />);
+  assert.match(html, /<h1>Selected films<\/h1>/);
+  assert.match(html, /An exact introduction\./);
+  assert.equal((html.match(/>second film</g) || []).length, 1);
+  assert.ok(html.indexOf(">second film<") < html.indexOf(">first film<"));
+  assert.ok(html.indexOf(">first film<") < html.indexOf(">third film<"));
+  assert.doesNotMatch(html, /missing-draft/);
 });
 
 test("text-only Fashion projects retain their empty-media state without fabricated photographs", () => {

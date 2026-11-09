@@ -53,6 +53,7 @@ export default buildConfig({
         photographs: { Component: "/components/cms/PhotographsView#PhotographsView", path: "/photographs", exact: true },
         preview: { Component: "/components/cms/PhotographsView#PreviewView", path: "/preview", exact: true },
         projectPreview: { Component: "/components/cms/ProjectPreview#ProjectPreview", path: "/project-preview", exact: true },
+        videoPagePreview: { Component: "/components/cms/VideoPagePreview#VideoPagePreview", path: "/video-page-preview", exact: true },
       },
     },
   },

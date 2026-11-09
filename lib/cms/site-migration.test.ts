@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { postgresAdapter, sql, type MigrateUpArgs } from "@payloadcms/db-postgres";
-import { APIError, buildConfig, createLocalReq, getPayload, restoreVersionOperation, type CollectionSlug, type GlobalSlug, type Payload, type SanitizedConfig } from "payload";
+import { APIError, buildConfig, createLocalReq, getPayload, restoreVersionOperation, ValidationError, type CollectionSlug, type GlobalSlug, type Payload, type SanitizedConfig } from "payload";
 import { up as baselineUp } from "../../migrations/20261031_200002_payload_journal";
 import { up as historyUp } from "../../migrations/20261031_202034_history_precision";
 import { up as nativeUp } from "../../migrations/20261102_200000_native_journal";
@@ -12,6 +12,7 @@ import { up as categoriesUp } from "../../migrations/20261104_110000_portfolio_c
 import { up as expansionUp } from "../../migrations/20261104_120000_site_expansion";
 import { up as homepageUp } from "../../migrations/20261105_120000_homepage";
 import { up as originalsUp } from "../../migrations/20261106_120000_large_originals";
+import { up as customizationUp } from "../../migrations/20261109_120000_page_customization";
 import type { Post } from "../../payload-types";
 
 const identifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
@@ -82,7 +83,7 @@ async function disabledRegisteredConfig(actual: SanitizedConfig, connectionStrin
     routes: actual.routes, serverURL: actual.serverURL, csrf: actual.csrf,
     editor: actual.editor ? () => actual.editor! : undefined, graphQL: { disable: true },
     collections: actual.collections.filter(collection => !generated.has(collection.slug)).map(collection =>
-      originalCollections.has(collection.slug) ? collection : { ...collection, lockDocuments: false }),
+      collection.slug === "posts" ? { ...collection, fields: collection.fields.filter(field => !("name" in field) || field.name !== "palette"), flattenedFields: collection.flattenedFields.filter(field => !("name" in field) || !["palette", "mode", "background", "colourA", "colourB", "accent"].includes(field.name)) } : originalCollections.has(collection.slug) ? collection : { ...collection, lockDocuments: false }),
     globals: actual.globals.map(global => ({ ...global, lockDocuments: false })),
     db: postgresAdapter({ pool: { connectionString, max: 3 }, schemaName: "arnaud_cms", idType: "uuid", allowIDOnCreate: true, push: false, disableCreateDatabase: true }),
     typescript: { ...actual.typescript, autoGenerate: false },
@@ -233,6 +234,13 @@ test("site migration preserves populated native content, restricted roles and re
         await homepageUp({ db } as unknown as MigrateUpArgs);
       });
       await assertPreserved(pg, expanded);
+      const homepageCheckpoint = await oldTables(pg);
+      await assert.rejects(customizationUp({ db: off.db.drizzle } as unknown as MigrateUpArgs), /Arnaud-only migration identity/);
+      await off.db.drizzle.transaction(async db => {
+        await db.execute(sql`set local role arnaud_cms_migrator`);
+        await customizationUp({ db } as unknown as MigrateUpArgs);
+      });
+      await assertPreserved(pg, homepageCheckpoint);
       await off.db.drizzle.execute(sql`delete from arnaud_cms._site_settings_v where id = ${versionId}`);
       await off.db.drizzle.execute(sql`delete from arnaud_cms.site_settings where id = ${mainId}`);
     });
@@ -300,6 +308,55 @@ test("site migration preserves populated native content, restricted roles and re
       assert.equal(settings.intro, "Published settings");
     });
     await assertPreserved(pg, preserved);
+    await t.test("page palette, active primary source and landing settings retain native publication and version boundaries", async () => {
+      const palette = { mode: "custom" as const, background: "#102030", colourA: "#abcdef", colourB: "#123456", accent: "#fedcba" };
+      const options = { user, overrideAccess: false, depth: 0 };
+      const film = await on.db.create({ collection: "media", data: { filename: "retained-film.mp4", mimeType: "video/mp4", verified: true, sha256: "d".repeat(64), uploadIdentity: "journal-native/retained-film.mp4" } });
+      let video = await on.create({ collection: "videos", ...options, data: { title: "Legacy film", slug: "legacy-film", film: film.id, editRevision: 0, _status: "published" } });
+      assert.equal(video.videoSource, null, "No schema default may deactivate a legacy uploaded film");
+      assert.ok((await on.find({ collection: "media", overrideAccess: false })).docs.some(item => item.id === film.id));
+      const filmVersion = (await on.findVersions({ collection: "videos", ...options, sort: "-createdAt" })).docs[0];
+      video = await on.update({ collection: "videos", id: video.id, ...options, draft: true, data: { videoSource: "youtube", youtubeUrl: "invalid", editRevision: video.editRevision } });
+      await assert.rejects(on.update({ collection: "videos", id: video.id, ...options, data: { _status: "published", editRevision: video.editRevision } }), ValidationError);
+      video = await on.update({ collection: "videos", id: video.id, ...options, data: { _status: "published", youtubeUrl: "https://youtu.be/dQw4w9WgXcQ", editRevision: video.editRevision } });
+      assert.equal(video.youtubeUrl, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+      assert.equal(video.film, film.id, "Inactive immutable original selection is retained");
+      assert.ok(!(await on.find({ collection: "media", overrideAccess: false })).docs.some(item => item.id === film.id), "Inactive primary film cannot remain anonymously authorized");
+      const restoredVideo = await restoreVersionOperation({ collection: on.collections.videos, id: filmVersion.id, draft: true, overrideAccess: false, req: await createLocalReq({ user }, on) });
+      assert.equal(restoredVideo._status, "draft");
+      assert.equal((await on.findByID({ collection: "videos", id: video.id, overrideAccess: false })).videoSource, "youtube");
+      const privateVideo = await on.create({ collection: "videos", ...options, draft: true, data: { title: "Incomplete source", videoSource: "upload" } });
+      await assert.rejects(on.update({ collection: "videos", id: privateVideo.id, ...options, data: { _status: "published", editRevision: privateVideo.editRevision } }), ValidationError);
+      for (const collection of ["posts", "fashion-projects"] as const) {
+        let page = await on.create({ collection, ...options, draft: true, data: { title: "Palette draft", body: body("Retained writing"), palette: { ...palette, accent: "bad" } } });
+        await assert.rejects(on.update({ collection, id: page.id, ...options, data: { _status: "published", editRevision: page.editRevision } }), ValidationError);
+        page = await on.update({ collection, id: page.id, ...options, data: { _status: "published", palette, editRevision: page.editRevision } });
+        const snapshot = (await on.findVersions({ collection, ...options, sort: "-createdAt" })).docs[0];
+        page = await on.update({ collection, id: page.id, ...options, draft: true, data: { palette: { accent: "#ffffff" }, editRevision: page.editRevision } });
+        assert.equal(page.palette?.background, palette.background, "Partial custom palette updates retain sibling atmosphere roles");
+        assert.equal((await on.findByID({ collection, id: page.id, overrideAccess: false })).palette?.accent, palette.accent);
+        await restoreVersionOperation({ collection: on.collections[collection], id: snapshot.id, draft: true, overrideAccess: false, req: await createLocalReq({ user }, on) });
+        assert.equal((await on.findByID({ collection, id: page.id, overrideAccess: false })).palette?.accent, palette.accent);
+        await on.update({ collection, id: page.id, ...options, unpublishAllLocales: true, data: { _status: "draft" } });
+      }
+      let settings = await on.findGlobal({ slug: "site-settings", ...options, draft: true, depth: 0 });
+      settings = await on.updateGlobal({ slug: "site-settings", ...options, draft: true, data: { editRevision: settings.editRevision, videoPage: { heading: "Films", intro: "Retained video introduction", featuredVideo: privateVideo.id, orderedVideos: [{ video: video.id }, { video: video.id }] } } });
+      await assert.rejects(on.updateGlobal({ slug: "site-settings", ...options, data: { editRevision: settings.editRevision, _status: "published" } }), ValidationError);
+      await assert.rejects(on.updateGlobal({ slug: "site-settings", ...options, data: { editRevision: settings.editRevision, videoPage: { orderedVideos: [{ video: video.id }] }, _status: "published" } }), ValidationError);
+      settings = await on.updateGlobal({ slug: "site-settings", ...options, data: { editRevision: settings.editRevision, videoPage: { featuredVideo: video.id, orderedVideos: [{ video: video.id }] }, _status: "published" } });
+      assert.equal(settings.videoPage?.heading, "Films");
+      assert.ok(!(await on.find({ collection: "media", overrideAccess: false })).docs.some(item => item.id === film.id), "Featured/ordered relationships must not grant independent media access");
+      const settingsVersion = (await on.findGlobalVersions({ slug: "site-settings", ...options, sort: "-createdAt" })).docs[0];
+      settings = await on.updateGlobal({ slug: "site-settings", ...options, draft: true, data: { editRevision: settings.editRevision, videoPage: { heading: "Private heading" } } });
+      assert.equal((await on.findGlobal({ slug: "site-settings", overrideAccess: false })).videoPage?.heading, "Films");
+      const { restoreSiteSettingsVersion } = await import("./site-settings");
+      const restored = await restoreSiteSettingsVersion(await createLocalReq({ user }, on), String(settingsVersion.id));
+      assert.equal(restored._status, "draft");
+      assert.equal(restored.videoPage?.heading, "Films");
+      await on.update({ collection: "videos", id: video.id, ...options, unpublishAllLocales: true, data: { _status: "draft" } });
+      await assert.rejects(on.updateGlobal({ slug: "site-settings", ...options, data: { editRevision: restored.editRevision, _status: "published" } }), ValidationError);
+      await on.updateGlobal({ slug: "site-settings", ...options, unpublishAllLocales: true, data: { _status: "draft" } });
+    });
   } finally {
     try {
       for (const payload of [...payloads]) await close(payload);

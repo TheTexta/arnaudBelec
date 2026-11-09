@@ -40,6 +40,20 @@ export async function parsedSourceBundle(directory, manifest) {
   return { ...manifest, pages, assets };
 }
 
+export function validateUploadScope(plan) {
+  if (plan.scope === "unassigned-journal-media-only") {
+    assert.equal(plan.drafts.length, 0, "Library-only intake cannot create editorial content.");
+    assert.ok(plan.media.length > 0 && plan.media.length <= 19);
+    assert.ok(plan.media.every(item => item.group === "placement-review"));
+    assert.ok(plan.media.filter(item => item.bundle === "images").length <= 17);
+    assert.ok(plan.media.filter(item => item.bundle === "videos").length <= 2);
+    assert.equal(new Set(plan.media.map(item => item.sha256)).size, plan.media.length);
+  } else {
+    assert.ok(!plan.scope, "Unknown intake scope.");
+    assert.ok(plan.media.every(item => importGroups.includes(item.group)));
+  }
+}
+
 export async function nativeInventory(session) {
   const request = api(session), result = {};
   for (const collection of collections) {
@@ -199,11 +213,13 @@ export async function applyUploadPlan(planPath, confirmation, sessionDirectory) 
   }
   const images = await parsedSourceBundle(plan.bundles.images.directory, JSON.parse(await readFile(join(plan.bundles.images.directory, "manifest.json"), "utf8")));
   const videos = JSON.parse(await readFile(join(plan.bundles.videos.directory, "manifest.json"), "utf8"));
+  validateUploadScope(plan);
   for (const media of plan.media) {
-    assert.ok(["images", "videos"].includes(media.bundle) && importGroups.includes(media.group));
+    assert.ok(["images", "videos"].includes(media.bundle));
     const source = media.bundle === "images" ? images.assets.find(asset => asset.id === media.assetId) : videos.videos.find(video => `adobe:${video.id}` === media.assetId);
     assert.ok(source?.status === "staged" && source.file === media.file && source.sha256 === media.sha256 && source.bytes === media.bytes, "Plan file is not a pinned staged asset.");
     assert.equal(media.mimeType, media.bundle === "images" ? source.mimeType : "video/mp4");
+    if (plan.scope === "unassigned-journal-media-only") assert.ok(media.bundle === "images" ? source.placements.some(p => p.group === "placement-review") : source.group === "placement-review");
   }
   for (const draft of plan.drafts) assert.ok(["posts", "videos", "fashion-projects"].includes(draft.collection) && draft.data._status === "draft" && !draft.data.id, "Only new private content records are permitted.");
   const session = await importSession(sessionDirectory), request = api(session), audit = dirname(planPath);

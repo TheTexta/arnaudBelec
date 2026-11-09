@@ -6,16 +6,17 @@ import type { ReactNode } from "react";
 import type { SiteSettings } from "@/lib/site/types";
 import { PublicAtmosphere } from "@/components/site-effects/PublicAtmosphere";
 import { SiteNavigation } from "./SiteNavigation";
-import { PublicAudioProvider } from "@/components/site-audio/PublicAudioProvider";
 import { SoundControls } from "@/components/site-audio/SoundControls";
 import { SubscribeForm } from "@/components/site-newsletter/SubscribeForm";
 import { HomeFluid } from "@/components/site-effects/HomeFluid";
 import { homeInk } from "@/lib/site/homepage";
 import type { CSSProperties } from "react";
+import type { PagePalette } from "@/lib/site/page-palette";
+import { paletteStyle } from "@/lib/site/palette-style";
 
-type ShellSettings = Pick<SiteSettings, "contactEmail" | "socialLinks" | "ambientAudio"> & { homePalette: SiteSettings["homepage"]["palette"] };
+type ShellSettings = Pick<SiteSettings, "contactEmail" | "socialLinks"> & { homePalette: SiteSettings["homepage"]["palette"] };
 
-export function SiteShell({ children, settings, newsletterAvailable = false }: { children: ReactNode; settings: ShellSettings; newsletterAvailable?: boolean }) {
+export function SiteShell({ children, settings, palette = null, newsletterAvailable = false }: { children: ReactNode; settings: ShellSettings; palette?: PagePalette | null; newsletterAvailable?: boolean }) {
   const pathname = usePathname();
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return children;
 
@@ -24,8 +25,8 @@ export function SiteShell({ children, settings, newsletterAvailable = false }: {
   const preset = pathname.startsWith("/blog") ? "journal" : pathname.startsWith("/video") ? "video" : pathname.startsWith("/fashion") ? "fashion" : "home";
 
   const homeStyle = isHome ? { "--home-filler": settings.homePalette.background, "--home-ink": homeInk(settings.homePalette.background) } as CSSProperties : undefined;
-  return <PublicAudioProvider track={settings.ambientAudio}><div className={`site-shell site-shell--${isPhoto ? "photo" : preset}${isHome ? " site-shell--entrance" : ""}`} style={homeStyle}>
-    {isHome ? <HomeFluid palette={settings.homePalette} /> : !isPhoto ? <PublicAtmosphere preset={preset} className="site-atmosphere" /> : null}
+  return <div className={`site-shell site-shell--${isPhoto ? "photo" : preset}${isHome ? " site-shell--entrance" : ""}${palette ? " site-page-palette" : ""}`} style={palette ? paletteStyle(palette) : homeStyle}>
+    {isHome ? <HomeFluid palette={settings.homePalette} /> : !isPhoto ? <PublicAtmosphere preset={preset} palette={palette} className="site-atmosphere" /> : null}
     <a className="site-skip" href="#public-content">Skip to content</a>
     {!isHome ? <header className="site-header">
       <Link className="site-name" href="/">Arnaud Belec</Link>
@@ -41,5 +42,5 @@ export function SiteShell({ children, settings, newsletterAvailable = false }: {
         {settings.socialLinks.filter((link) => /^(?:https:\/\/|mailto:)/i.test(link.url)).map((link) => <a key={link.url} href={link.url} rel="me">{link.label}</a>)}
       </div>
     </footer> : null}
-  </div></PublicAudioProvider>;
+  </div>;
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { loadPublicPhotographs } from "@/lib/supabase-public";
 import PhotoDetail from "@/app/photos/[filename]/photo-detail";
+import { PublicSiteFrame } from "@/components/site/PublicSiteFrame";
 
 type PhotoPageProps = {
   params: Promise<{ filename: string }>;
@@ -49,5 +50,5 @@ export default async function PhotoPage({ params }: PhotoPageProps) {
   const photograph = photographs.find((item) => item.filename === filename);
   if (!photograph) notFound();
 
-  return <PhotoDetail key={photograph.id} photograph={photograph} photographs={photographs} />;
+  return <PublicSiteFrame><PhotoDetail key={photograph.id} photograph={photograph} photographs={photographs} /></PublicSiteFrame>;
 }
