@@ -73,13 +73,13 @@ test("Video preserves native playback and its introduction after the film", () =
   assert.ok(!html.includes("site-project-detail--fashion"));
 });
 
-test("YouTube appears click-to-load on both film routes without remote thumbnails or inactive films", () => {
+test("YouTube initializes by default on both film routes without inactive native films", () => {
   const video: PublicProject = { ...project, kind: "video", videoSource: "youtube", youtubeId: "abcdefghijk", film: null };
   for (const html of [renderToStaticMarkup(<ProjectDetail project={video} />), renderToStaticMarkup(<ProjectIndex kind="video" projects={[video]} />)]) {
-    assert.match(html, /Play video/);
+    assert.match(html, /Loading YouTube player/);
     assert.match(html, /Watch on YouTube/);
     assert.doesNotMatch(html, /<iframe|<script|ytimg|<video/);
-    assert.match(html, /src="\/api\/cms\/media\/file\/fixture-1.jpg"/);
+    assert.doesNotMatch(html, /Play video|Close player/);
   }
 });
 

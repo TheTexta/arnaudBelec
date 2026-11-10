@@ -13,7 +13,7 @@ await mkdir(evidence, { recursive: true, mode: 0o700 });
 const image = await readFile(new URL("../../public/test-image.jpg", import.meta.url));
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const checks = [];
-const mockSDK = `window.YT={Player:class{constructor(target,options){this.options=options;this.frame=document.createElement('iframe');target.replaceWith(this.frame);queueMicrotask(()=>options.events.onReady({target:this}))}getIframe(){return this.frame}playVideo(){this.options.events.onStateChange({target:this,data:1})}destroy(){this.frame.remove()}}};`;
+const mockSDK = `window.__yt=[];window.YT={Player:class{constructor(target,options){this.options=options;this.muted=true;this.state=-1;this.frame=document.createElement('iframe');target.replaceWith(this.frame);window.__yt.push(this);queueMicrotask(()=>options.events.onReady({target:this}))}getIframe(){return this.frame}getPlayerState(){return this.state}isMuted(){return this.muted}mute(){this.muted=true}unMute(){this.muted=false}playVideo(){this.state=1;this.options.events.onStateChange({target:this,data:1})}pauseVideo(){if(this.state!==2){this.state=2;this.options.events.onStateChange({target:this,data:2})}}destroy(){this.frame.remove()}}};`;
 try {
   for (const width of [390, 1440]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
@@ -77,21 +77,24 @@ try {
 
       for (const path of ["/video", "/video/synthetic-youtube-study"]) {
         await visit(path);
-        assert.equal(await page.locator("iframe").count(), 0);
-        assert.equal(sdkRequests, path === "/video" ? 0 : 1);
-        await page.getByRole("button", { name: "Play video: Synthetic YouTube source study", exact: true }).waitFor();
+        await page.locator('iframe[title="Synthetic YouTube source study"]').waitFor();
+        assert.equal(sdkRequests, path === "/video" ? 1 : 2);
         if (path === "/video") {
           assert.equal(await page.locator("main h1").textContent(), "Synthetic films");
           assert.deepEqual(await page.locator(".site-project-entry h2").allTextContents(), ["Synthetic YouTube source study", "Synthetic film study"]);
         }
         await capture(path === "/video" ? "video-landing" : "youtube-detail");
-        await page.getByRole("button", { name: "Play video: Synthetic YouTube source study", exact: true }).click();
-        await page.locator('iframe[title="Synthetic YouTube source study"]').waitFor();
-        await page.getByRole("button", { name: "Close player: Synthetic YouTube source study" }).click();
-        assert.equal(await page.locator("iframe").count(), 0);
-        checks.push({ check: "integrated-click-only-youtube", path, width });
+        const unmute = page.getByRole("button", { name: "Unmute video: Synthetic YouTube source study", exact: true });
+        await unmute.scrollIntoViewIfNeeded();
+        await page.waitForFunction(() => window.__yt[0]?.state === 1 && window.__yt[0]?.muted);
+        await unmute.click();
+        await page.waitForFunction(() => window.__yt[0]?.muted === false);
+        assert.equal(await page.locator("iframe").count(), 1);
+        await page.getByRole("button", { name: "Mute video: Synthetic YouTube source study", exact: true }).click();
+        await unmute.waitFor();
+        checks.push({ check: "integrated-default-embed-viewport-autoplay-unmute", path, width });
       }
-      assert.equal(sdkRequests, 2, "Each full page load requests the SDK only after its own Play action");
+      assert.equal(sdkRequests, 2, "Each full page initializes the SDK without a Play action");
       for (const path of ["/cms/video-page-preview", "/cms/project-preview?collection=fashion-projects&id=12345678-1234-4234-8234-123456789abc", "/cms/preview?id=12345678-1234-4234-8234-123456789abc"]) {
         const response = await context.request.get(origin + path, { maxRedirects: 0 });
         const body = await response.text();
@@ -118,6 +121,9 @@ try {
       await capture("cms-fashion-preview");
       await visit("/cms/video-page-preview");
       await page.getByRole("heading", { name: "Synthetic films", exact: true }).waitFor();
+      await page.locator('iframe[title="Synthetic YouTube source study"]').waitFor();
+      await page.getByRole("button", { name: "Unmute video: Synthetic YouTube source study", exact: true }).click();
+      await page.waitForFunction(() => window.__yt[0]?.muted === false);
       await capture("cms-video-page-preview");
       const posts = await (await context.request.get(origin + "/api/cms/posts?depth=0")).json();
       const post = posts.docs.find(doc => doc.slug === "synthetic-journal-study");

@@ -15,7 +15,7 @@ describes the earlier releases, not the current full-site layout.
 **Page customization rollout (2026-11-09):** Journal posts and Fashion projects
 now support individual background/atmosphere/accent palettes. The homepage's bottom
 containers are transparent, with small readability backings retained on controls
-and text. Videos support click-to-load YouTube or uploaded-film playback on the
+and text. Videos support YouTube or uploaded-film playback on the
 index and detail pages; Site settings controls the Video heading, intro, featured
 film and manual order. Native drafts, previews, versions and explicit publishing
 remain in use. After explicit owner approval, the additive
@@ -25,6 +25,21 @@ no existing content is automatically recoloured or converted to embeds. See
 [`docs/page-customization.md`](docs/page-customization.md) for authoring, verification
 and remaining live-provider acceptance. Migration preservation and release scope
 are recorded in [`docs/page-customization-rollout-20261109.md`](docs/page-customization-rollout-20261109.md).
+
+With subsequent owner approval, the four previously link-only Video entries now
+use YouTube players on the index and detail pages. Their body links,
+credits, publication dates/states and originals are preserved. See
+[`docs/youtube-embed-conversion-20261109.md`](docs/youtube-embed-conversion-20261109.md).
+
+**YouTube viewport follow-up (release authorized):** embeds now initialize without a
+click, autoplay muted while at least a quarter of the frame is in view, and
+pause/mute off-screen or in a hidden tab. Clicking the video unmutes without
+reloading it; returning to view stays silent. Muted films do not interrupt music.
+This replaces click-to-load privacy: YouTube can load before interaction. Uploaded
+films, CMS content and originals are unchanged; no migration is required. See the
+playback section in `docs/page-customization.md` for checks and browser-policy limits.
+The owner authorized committing/pushing this follow-up to deployment-linked `main`;
+local acceptance is not a production deployment receipt.
 
 **Production content intake (2026-11-06):** the scoped Video/Fashion release is
 live, with eight new public photographs (16 total), 11 private Fashion images and

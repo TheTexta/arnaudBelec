@@ -38,24 +38,45 @@ Existing links, credits, body content, original masters/variants, publication
 states and permissions are preserved. Existing YouTube links in project bodies
 are not automatically converted; select YouTube and publish deliberately.
 
+The owner subsequently requested conversion of the four existing published
+link-only Videos. That native content update is complete; see
+[`youtube-embed-conversion-20261109.md`](youtube-embed-conversion-20261109.md).
+Other existing/future body links still require an explicit primary-source choice.
+
 The homepage's sound/subscription/footer **containers** no longer paint a solid
 strip. The fluid field stays behind them. Small control/text backings retain
 readability, as do the existing nameplate, section labels and intro backings.
 
 ## Playback, privacy and authorization
 
-`YouTubeVideo` is used on `/video` and individual film pages. Before Play there is
-no YouTube iframe, SDK or remote thumbnail request; only a supplied same-origin
-CMS cover may load. Explicit Play loads the official iframe API and creates a
-privacy-enhanced `youtube-nocookie.com` player. This is click-to-load, not a claim
-that YouTube sends no data after interaction. Browser policy may require another
-gesture inside its controls. Restricted/private/deleted videos offer bounded
-failure, explicit retry and an outbound Watch on YouTube link.
+**Viewport-playback follow-up:** the owner superseded
+click-to-load with default embeds, muted viewport autoplay and click-to-unmute.
+`YouTubeVideo` initializes the official iframe API and a privacy-enhanced
+`youtube-nocookie.com` player on hydration, without waiting for a click. YouTube
+may therefore receive requests before interaction; the privacy-enhanced hostname
+does not mean no data is sent. The server reserves the 16:9 player space and
+announces loading while the API initializes. No content conversion or migration
+is needed for this behavior change.
 
-Starting YouTube pauses ambient/native/other YouTube playback. Pause, end, close,
-unmount and failure release its activity lock; ambient music never automatically
-resumes. Native playback stops an open external player. The component also works
-in private CMS previews without the public audio provider.
+At least 25% of the frame must be visible in a visible tab to autoplay. Leaving
+that viewport or hiding the tab pauses and mutes the existing player; returning
+resumes muted at its existing position. Clicking/tapping the video (or activating
+its Unmute button with Enter/Space) enables sound without recreating the iframe.
+The overlay leaves the bottom control strip exposed; after unmute the full native
+player is interactive. Separate Pause/Resume controls let visitors stop autoplay
+without turning on sound, and Mute video is available with sound on. A manual
+pause is respected until the next viewport/tab entry.
+Browser autoplay restrictions display recovery guidance, while unavailable or
+restricted films retain bounded initialization, explicit retry and Watch on
+YouTube fallback.
+
+Silent players can coexist and do not interrupt ambient/native audio. Unmuting
+claims sound, pauses native/ambient audio and mutes other YouTube players without
+destroying their iframes. Native playback likewise mutes YouTube. Delayed iframe
+mute acknowledgements cannot reclaim another player's sound; an explicit Unmute
+overrides pending silence. Pause, end, unmount and failure release the sound lock;
+ambient music never automatically resumes. Private CMS previews work without the
+public audio provider. Uploaded-film playback remains unchanged.
 
 Only active uploaded primary films plus genuinely used covers/body/gallery/frame
 media contribute publication references. A retained inactive film is not granted
@@ -103,8 +124,10 @@ or rewrite editorial choices as an automatic rollback step.
   restore and native-only OFF compatibility.
 - Site: 46 tests, including source/palette DTOs, contrast roles, featured ordering,
   selection filtering, native layout regression and newsletter transaction tests.
-- Media: four tests. Standalone YouTube SSR plus 12 mocked Chrome scenarios cover
-  lazy loading, competition, cleanup, bounded failure/retry and standalone preview.
+- Media: four tests. The updated standalone YouTube SSR/mocked Chrome matrix covers
+  default embeds, viewport/tab entry and exit, muted coexistence, keyboard unmute,
+  native controls, delayed mute acknowledgement, cleanup, bounded failure/retry,
+  blocked-autoplay recovery and standalone preview.
 - CMS/expansion-enabled and disabled optimized Webpack builds pass with synthetic
   settings, `.env` loading suppressed, outbound traffic blocked and no build-time
   database connection. Initial cold builds reported warnings without diagnostics;
@@ -135,10 +158,34 @@ node scripts/cms/verify-youtube-browser.mjs
 ```
 
 Screenshots/results are ignored under `.local/site-expansion-browser/` and
-`.local/page-customization-browser/`. Real YouTube/provider playback, physical
-Safari/iOS and live content publication remain separate acceptance gates. Production
+`.local/page-customization-browser/`. Real playback for the four converted YouTube
+films subsequently passed the short Chrome checks documented in the conversion
+record above. Physical Safari/iOS, full-length playback and other live content
+publication remain separate acceptance gates. Production
 migration/deployment scope and receipts are recorded in the rollout document.
 Mock transport is not real YouTube acceptance.
+
+The local viewport follow-up additionally passed real anonymous Chrome playback
+using the actual component and all four existing public YouTube IDs: muted
+autoplay, advancing frames/time, click-to-unmute without iframe replacement,
+off-screen pause/mute and silent re-entry. All four passed at 1440px and the first
+also passed at 390px without overflow. Evidence and the local-only acceptance
+runner are under ignored `.local/youtube-autoplay-20261109/`. This verifies local
+source with the real provider, not a new production deployment or physical iOS.
+
+Follow-up validation: lint, TypeScript, 46 site tests, four media tests, 18
+standalone SSR/mocked-browser checks and the 14 integrated checks passed. The
+CMS/expansion-enabled optimized Webpack build passed cleanly on the final run;
+the disabled optimized build also passed. Both suppress `.env` loading and
+network access and isolate output without rewriting tracked TypeScript setup.
+Independent read-only review's delayed-mute handoff finding was fixed and covered
+by the delayed-acknowledgement regression; targeted re-review found no blocker.
+Real and synthetic mobile/desktop screenshots were visually reviewed. At that local
+validation checkpoint, no new commit, push, deployment, production data write or
+infrastructure change had occurred. The owner subsequently authorized committing
+and pushing this follow-up to deployment-linked `main`. Local checks do not establish
+the resulting Vercel deployment status or live acceptance; no schema/content write
+or infrastructure mutation is required by this application release.
 
 The native CMS's existing long-title breadcrumb overflows horizontally at 390px
 for the synthetic project name. The new colour controls fit within the viewport;

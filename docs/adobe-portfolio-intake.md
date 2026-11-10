@@ -416,3 +416,17 @@ profile with zero drafts and bounded unique assets from verified placement-revie
 sources. Run Media intake before link publication: publication changes the pinned
 video baseline. Uncertain operations remain a hard reconciliation gate, not
 permission to discard journals or blindly repeat a write.
+
+## YouTube player follow-up — 2026-11-09
+
+After the separately approved player/application deployment, the owner explicitly
+requested converting the four existing linked Videos to embeds. Their native
+primary sources now use YouTube on `/video` and the individual pages. Existing
+body links, content, publication dates/states and all originals remain unchanged;
+four native historical snapshots were added. This supersedes the link-only UI
+described at the 2026-11-07 checkpoint, not its preserved intake evidence.
+
+See [`youtube-embed-conversion-20261109.md`](youtube-embed-conversion-20261109.md)
+for exact sources, backup/plan hashes, preservation checks and session cleanup.
+No extra draft publication, media upload, application deployment or newsletter
+operation was performed for the conversion.

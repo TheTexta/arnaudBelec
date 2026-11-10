@@ -5,7 +5,9 @@
 .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .mount iframe { display: block; width: 100%; height: 100%; border: 0; }
 .video button, .actions a { min-height: 44px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
-.video .play { position: relative; color: var(--site-ink, #25334b); background: var(--site-chalk, #f4f5f3); }
+.video .retry { position: relative; color: var(--site-ink, #25334b); background: var(--site-chalk, #f4f5f3); }
+.video .unmute { position: absolute; inset: 0 0 48px; display: flex; align-items: flex-end; justify-content: flex-end; border: 0; padding: 12px; }
+.unmute > span { padding: 8px 12px; color: var(--site-ink, #25334b); background: var(--site-chalk, #f4f5f3); border: 1px solid currentColor; }
 .video button:hover, .actions a:hover { text-decoration: underline; text-underline-offset: 4px; }
 .video :focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }

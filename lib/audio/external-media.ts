@@ -1,4 +1,4 @@
-// Browser-only registrations: mounting a player never starts media or loads an SDK.
+// Browser-only sound coordination. Silent viewport playback does not claim audio.
 const players = new Map<symbol, () => void>();
 const active = new Set<symbol>();
 const listeners = new Set<() => void>();
