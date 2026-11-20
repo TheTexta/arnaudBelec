@@ -1,7 +1,7 @@
 import { sql } from "@payloadcms/db-postgres";
 import { APIError, ValidationError, type GlobalConfig, type GlobalSlug, type PayloadRequest } from "payload";
 import { isCmsUser } from "./auth";
-import { editRevision, siteTransaction } from "./projects";
+import { nativeTransaction, nativeEditRevision, isStatusOnlyUnpublish, isStaleNativeWrite, nextNativeRevision } from "./native-write";
 import { mediaId, requireSiteExpansion, siteAdmin, siteExpansionEnabled, siteRead, validateSiteMedia } from "./site-access";
 import { defaultSiteSettings } from "../site/types";
 import { homepageField, homepageMediaUses, homepagePhotographs, HomepageValidationError, mergeHomepage } from "./homepage";
@@ -63,17 +63,17 @@ export const SiteSettings: GlobalConfig = {
       if (operation === "restoreVersion") throw new APIError("Use the private Site Settings restore endpoint.", 400);
       if (operation !== "update") return args;
       if (!isCmsUser(req.user)) throw new APIError("Sign in to Arnaud’s admin.", 403);
-      const db = await siteTransaction(req);
+      const db = await nativeTransaction(req, "Site");
       // The first draft may exist only in versions, before a main row exists.
       // Serialize that first-save case too, without creating a public skeleton.
       await db.execute(sql`select pg_advisory_xact_lock(617204, 1)`);
       const main = await db.execute(sql`select edit_revision from arnaud_cms.site_settings for update`);
       const history = await db.execute(sql`select coalesce(max(version_edit_revision), 0) as revision from arnaud_cms._site_settings_v`);
-      const revision = Math.max(editRevision(main.rows[0]?.edit_revision ?? 0), editRevision(history.rows[0]?.revision ?? 0));
+      const revision = Math.max(nativeEditRevision(main.rows[0]?.edit_revision ?? 0, "content"), nativeEditRevision(history.rows[0]?.revision ?? 0, "content"));
       const data = (args?.data ?? {}) as Record<string, unknown>;
-      const statusOnly = Object.keys(data).length === 1 && data._status === "draft";
+      const statusOnly = isStatusOnlyUnpublish(data);
       const restoring = state(req).arnaudSettingsRestore === RESTORE;
-      if (!restoring && !statusOnly && (data.editRevision ?? 0) !== revision) throw new APIError("Site settings changed in another tab. Reload before saving; saved versions are retained.", 409);
+      if (isStaleNativeWrite(data.editRevision ?? 0, revision, { restoring, statusOnly })) throw new APIError("Site settings changed in another tab. Reload before saving; saved versions are retained.", 409);
       state(req).arnaudSettings = { token: WRITE, revision, statusOnly, restoring };
       return args;
     }],
@@ -81,7 +81,7 @@ export const SiteSettings: GlobalConfig = {
       requireSiteExpansion();
       const write = state(req).arnaudSettings;
       if (!write || write.token !== WRITE) throw new APIError("The settings write was not initialized.", 503);
-      data.editRevision = write.revision + (write.statusOnly ? 0 : 1);
+      data.editRevision = nextNativeRevision(write.revision, write.statusOnly);
       if (write.restoring) data._status = "draft";
       const merged = { ...originalDoc, ...data };
       merged.homepage = mergeHomepage(originalDoc?.homepage, data.homepage);

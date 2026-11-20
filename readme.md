@@ -120,6 +120,12 @@ or changing configuration. Do not retry operations with old artifacts or credent
 
 ## Palette gradients and grain
 
+`app/palette-scene.tsx` owns the shared archive/detail scene: relative photo
+measurement and observer cleanup, mutable orb positions, hover state, and the
+BloomLayer/GradientOrb wiring. Routes retain their original descriptor IDs and
+velocity seeds, photo markup/layout, colour selection, fades and pagination.
+Animation positions stay in refs rather than per-frame React state.
+
 On `/photos` and photograph detail pages, each orb has a small circular pointer,
 hover and drag target around its visible light (at least 44 CSS pixels wide),
 rather than a viewport-sized target across its gradient. Drag with mouse, pen or
@@ -183,6 +189,14 @@ The site reads the published photograph catalogue first, including each photogra
 The bucket is already provisioned on the current server, and `npm run storage:setup` verifies its settings or creates it on a new instance. Analyze an image locally before upload with `npm run photos:import -- --dry-run path/to/photo.jpg`, then publish with `npm run photos:import -- path/to/photo.jpg`. Multiple file paths are supported.
 
 ### Shared admin
+
+`lib/admin/photograph-upload.ts` owns the photograph batch's `submit`/`cancel`
+controller and typed progress/recovery updates; `photograph-upload-browser.ts`
+owns bounded image sampling and the existing signed TUS/R2 transfer adapters.
+The view retains previews and editable metadata. Both legacy admin and Payload's
+Photographs view use this controller through their existing authenticated request
+adapters (including upload error codes). Supabase remains the new-upload default;
+R2 session recovery keys, metadata retry and ambiguous-success behavior are unchanged.
 
 The upload panel is at `/admin`. Create a Supabase Auth user in Studio, then put that user's UUID in the server-only `SUPABASE_ADMIN_USER_IDS` environment variable. Separate multiple UUIDs with commas. The panel has no public sign-up flow, and every admin API request verifies its Supabase access token with Auth and checks this allowlist. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY` in the deployed environment as well as `.env.local` for local development. `.env.example` lists the required variables. The service-role key must never use a `NEXT_PUBLIC_` prefix.
 
@@ -278,6 +292,13 @@ To set a different title, alt text, capture date, or sort order per image, pass 
 The importer reads orientation and capture date from EXIF and now uses the same MMCQ analyser as uploads and original-file backfills, with an orientation-corrected sample up to 256 × 256 pixels and two quantisation phases. Each selected swatch is a colour observed in that sample, with noise rejection and minimum OKLab separation of 0.055. The separate background colour still uses the largest cluster from the outer 8% of a 96-pixel sample, with reduced chroma and unchanged OKLab lightness. Palette extraction excludes pixels within an OKLab distance of 0.08 from that background, then assigns the remaining population to its nearest selected swatches for gradient weights; selection scores are not weights. If no pixels remain, a uniform image keeps its original pixels. Transparent pixels are ignored; if the entire edge is transparent, the background extractor uses the opaque interior. Rank, RGB, hex, CIELAB for gallery matching and weight retain their existing fields; no separate OKLab database model is introduced. Original publication/cleanup and R2 recovery ordering are unchanged. Run `npm run test:palette` to check the extractors. The 16-photo production catalogue was backfilled with the verified, pinned run documented above.
 
 ## Journal / native Payload
+
+`lib/cms/native-write.ts` is the internal transaction/revision-command protocol
+shared by Posts, Projects and Site settings. Each hook still owns its locking SQL,
+server-only request markers, validation/errors and native Payload persistence.
+Status-only Unpublish does not advance content revisions. Collection restores and
+the separate private global restore remain distinct; settings retains its advisory
+first-save lock. This extraction needs no schema or deployment configuration change.
 
 The working source now uses **Payload 3.92.1's native Lexical editor**, drafts,
 autosave, versions, publication state and Media collection. BlockNote and the

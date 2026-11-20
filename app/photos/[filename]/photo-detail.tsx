@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BloomLayer, type OrbPositions } from "@/app/bloom-layer";
-import { GradientOrb, type GradientOrbColour, type MeasuredBounds } from "@/app/gradient-orb";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { PaletteScene } from "@/app/palette-scene";
+import type { GradientOrbColour } from "@/app/gradient-orb";
 import { findSimilarPhotographs } from "@/lib/photographs/similar-colours";
 import { foregroundForBackground } from "@/lib/photographs/page-colours";
 import { imagePlaceholder } from "@/lib/photographs/image-placeholder";
@@ -30,12 +30,9 @@ export default function PhotoDetail({
   photographs: PublicPhotograph[];
 }) {
   const [selectedPaletteIndex, setSelectedPaletteIndex] = useState<number | null>(null);
-  const [hoveredPaletteIndex, setHoveredPaletteIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const stageRef = useRef<HTMLElement>(null);
   const photoRef = useRef<HTMLButtonElement>(null);
-  const boundsRef = useRef<MeasuredBounds | null>(null);
-  const orbPositionsRef = useRef<OrbPositions>({});
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const hasPalette = photograph.palette.length > 0;
   const gradients = useMemo<GradientOrbColour[]>(
@@ -53,37 +50,6 @@ export default function PhotoDetail({
     [hasPalette, photograph, photographs, selectedPaletteIndex],
   );
   const imageAlt = photograph.altText?.trim() || photograph.title?.trim() || "Photograph by Arnaud Belec";
-  const updateOrbPosition = useCallback((id: string, x: number, y: number) => {
-    orbPositionsRef.current[id] = { x, y };
-  }, []);
-
-  useEffect(() => {
-    const stage = stageRef.current;
-    const photo = photoRef.current;
-    if (!stage || !photo) return;
-
-    const measure = () => {
-      const stageRect = stage.getBoundingClientRect();
-      const photoRect = photo.getBoundingClientRect();
-      boundsRef.current = {
-        version: (boundsRef.current?.version ?? 0) + 1,
-        width: stageRect.width,
-        height: stageRect.height,
-        photo: {
-          left: photoRect.left - stageRect.left,
-          top: photoRect.top - stageRect.top,
-          right: photoRect.right - stageRect.left,
-          bottom: photoRect.bottom - stageRect.top,
-        },
-      };
-    };
-
-    const observer = new ResizeObserver(measure);
-    observer.observe(stage);
-    observer.observe(photo);
-    measure();
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
@@ -112,32 +78,18 @@ export default function PhotoDetail({
         className="relative isolate grid h-svh w-full place-items-center"
         aria-label="Photograph and its palette gradients"
       >
-        <BloomLayer
+        <PaletteScene
           backgroundColour={photograph.backgroundHex ?? "#ffffff"}
           colours={gradients}
-          positionsRef={orbPositionsRef}
           selectedId={selectedPaletteIndex?.toString() ?? null}
-          hoveredId={hoveredPaletteIndex?.toString() ?? null}
+          stageRef={stageRef}
+          photoRef={photoRef}
+          onSelect={(_id, index) => {
+            playColourChord(index);
+            setSelectedPaletteIndex(current => current === index ? null : index);
+            setVisibleCount(PAGE_SIZE);
+          }}
         />
-        {gradients.map((colour, index) => (
-          <GradientOrb
-            key={colour.id}
-            colour={colour}
-            paletteSize={gradients.length}
-            isSelected={selectedPaletteIndex === index}
-            isHovered={hoveredPaletteIndex === index}
-            stageRef={stageRef}
-            boundsRef={boundsRef}
-            positionsRef={orbPositionsRef}
-            onPositionChange={updateOrbPosition}
-            onHoverChange={(hovered) => setHoveredPaletteIndex((current) => hovered ? index : current === index ? null : current)}
-            onSelect={() => {
-              playColourChord(index);
-              setSelectedPaletteIndex((current) => current === index ? null : index);
-              setVisibleCount(PAGE_SIZE);
-            }}
-          />
-        ))}
 
         <figure
           className="relative z-2 w-[min(calc(100vw_-_32px),var(--photo-max-width))] sm:w-[min(66.6667vw,var(--photo-max-width))]"

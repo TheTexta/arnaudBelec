@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { sql, type PostgresAdapter } from "@payloadcms/db-postgres";
+import { sql } from "@payloadcms/db-postgres";
 import { APIError, ValidationError, type CollectionBeforeOperationHook, type CollectionBeforeChangeHook, type CollectionConfig, type PayloadRequest } from "payload";
 import { isCmsUser } from "./auth";
 import { contentMedia } from "./content";
 import { hasText } from "@payloadcms/richtext-lexical/shared";
 import { siteExpansionEnabled } from "./site-access";
 import { mergePagePalette, pagePaletteField, validatePagePalette } from "./page-palette";
+import { nativeTransaction, nativeEditRevision, isStatusOnlyUnpublish, isStaleNativeWrite, nextNativeRevision } from "./native-write";
 
 const WRITE = Symbol("native journal write");
 type Current = { edit_revision: number; first_published_at: string | null; slug: string };
@@ -14,13 +15,6 @@ type WriteContext = { token: typeof WRITE; current?: Current; restoring: boolean
 // named server-only entry, with an unforgeable marker inside, across nested calls.
 const state = (req: PayloadRequest) => req.context as { arnaudNativeJournal?: WriteContext };
 const admin = ({ req }: { req: PayloadRequest }) => isCmsUser(req.user);
-
-async function transaction(req: PayloadRequest) {
-  const id = await req.transactionID;
-  const db = id ? req.payload.db.sessions?.[id]?.db : null;
-  if (!db) throw new APIError("Journal writes require a database transaction.", 503);
-  return db as PostgresAdapter["drizzle"];
-}
 
 const beforeOperation: CollectionBeforeOperationHook = async ({ args, operation, req }) => {
   if (operation === "read" && !isCmsUser(req.user) && "draft" in args) args.draft = false;
@@ -32,23 +26,20 @@ const beforeOperation: CollectionBeforeOperationHook = async ({ args, operation,
   if (restoring && (!("draft" in args) || args.draft !== true)) throw new APIError("Restore this version as a private draft.", 400);
   state(req).arnaudNativeJournal = { token: WRITE, restoring };
   if (operation === "create") return args;
-  const db = await transaction(req);
+  const db = await nativeTransaction(req, "Journal");
   const id = "id" in args ? args.id : undefined;
   const result = restoring
     ? await db.execute(sql`select p.edit_revision, p.first_published_at, p.slug from arnaud_cms.posts p join arnaud_cms._posts_v v on v.parent_id = p.id where v.id = ${id}::uuid for update of p`)
     : await db.execute(sql`select edit_revision, first_published_at, slug from arnaud_cms.posts where id = ${id}::uuid for update`);
   const row = result.rows[0];
   if (!row) throw new APIError("This journal post no longer exists. Return to the post list.", 404);
-  // Payload number columns are numeric, which raw node-pg decodes as strings.
-  // Decode at this adapter seam; never globally change PostgreSQL parsers.
-  const revision = Number(row.edit_revision);
-  if (!Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER) throw new APIError("The journal revision is invalid.", 503);
+  const revision = nativeEditRevision(row.edit_revision, "journal");
   const current: Current = { edit_revision: revision, first_published_at: row.first_published_at as string | null, slug: String(row.slug) };
   const data = "data" in args ? args.data as Record<string, unknown> : {};
   // Native Unpublish is a status-only command against the latest document, not
   // a stale form replacement. Restore explicitly selects a historical version.
-  const statusOnly = Object.keys(data).length === 1 && data._status === "draft";
-  if (!restoring && !statusOnly && data.editRevision !== current.edit_revision) throw new APIError("This post changed in another tab. Reload before saving; saved versions are retained.", 409);
+  const statusOnly = isStatusOnlyUnpublish(data);
+  if (isStaleNativeWrite(data.editRevision, current.edit_revision, { restoring, statusOnly })) throw new APIError("This post changed in another tab. Reload before saving; saved versions are retained.", 409);
   state(req).arnaudNativeJournal = { token: WRITE, current, restoring, statusOnly };
   return args;
 };
@@ -65,7 +56,7 @@ const beforeChange: CollectionBeforeChangeHook = async ({ data, originalDoc, req
   // Unpublish applies status to latest saved content, not a form replacement.
   // It must not advance the content token: stock Payload resets from its last
   // saved props. Actual autosaves, Publish and Restore do advance the token.
-  data.editRevision = (current?.edit_revision ?? 0) + (write.statusOnly ? 0 : 1);
+  data.editRevision = nextNativeRevision(current?.edit_revision ?? 0, write.statusOnly);
   const body = data.body ?? originalDoc?.body;
   if (siteExpansionEnabled()) {
     const palette = mergePagePalette(originalDoc?.palette, data.palette);
@@ -89,7 +80,7 @@ const beforeChange: CollectionBeforeChangeHook = async ({ data, originalDoc, req
     throw new ValidationError({ collection: "posts", errors: [{ path: "body", message: (error as Error).message }], req });
   }
   if (operation !== "create" && !write.statusOnly) {
-    const db = await transaction(req);
+    const db = await nativeTransaction(req, "Journal");
     // Only concurrency metadata changes on the main row during a private save.
     // Native Payload alone owns body/status/version persistence.
     await db.execute(sql`update arnaud_cms.posts set edit_revision = ${data.editRevision} where id = ${originalDoc.id}::uuid`);

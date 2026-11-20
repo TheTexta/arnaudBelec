@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { sql, type PostgresAdapter } from "@payloadcms/db-postgres";
+import { sql } from "@payloadcms/db-postgres";
 import { hasText } from "@payloadcms/richtext-lexical/shared";
 import { APIError, ValidationError, type CollectionConfig, type CollectionBeforeOperationHook, type CollectionBeforeChangeHook, type PayloadRequest } from "payload";
 import { isCmsUser } from "./auth";
@@ -7,23 +7,12 @@ import { contentMedia } from "./content";
 import { canonicalYoutubeUrl, effectiveVideoSource, youtubeVideoId } from "../media/youtube";
 import { mergePagePalette, pagePaletteField, validatePagePalette } from "./page-palette";
 import { mediaId, requireSiteExpansion, siteAdmin, siteExpansionEnabled, siteRead, validateSiteMedia, type MediaUse } from "./site-access";
+import { nativeTransaction, nativeEditRevision, isStatusOnlyUnpublish, isStaleNativeWrite, nextNativeRevision } from "./native-write";
 
 const WRITE = Symbol("native project write");
 type Current = { edit_revision: number; first_published_at: string | null; slug: string };
 type Write = { token: typeof WRITE; current?: Current; restoring: boolean; statusOnly?: boolean };
 const state = (req: PayloadRequest) => req.context as { arnaudProject?: Write };
-
-export async function siteTransaction(req: PayloadRequest) {
-  const id = await req.transactionID;
-  const db = id ? req.payload.db.sessions?.[id]?.db : null;
-  if (!db) throw new APIError("Site writes require a database transaction.", 503);
-  return db as PostgresAdapter["drizzle"];
-}
-export function editRevision(value: unknown) {
-  const revision = Number(value);
-  if (!Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER) throw new APIError("The content revision is invalid.", 503);
-  return revision;
-}
 
 export function projectMediaUses(data: Record<string, unknown>, collection?: "videos" | "fashion-projects"): MediaUse[] {
   const uses: MediaUse[] = [];
@@ -54,17 +43,17 @@ function projectCollection(slug: "videos" | "fashion-projects"): CollectionConfi
     if (restoring && (!("draft" in args) || args.draft !== true)) throw new APIError("Restore this version as a private draft.", 400);
     state(req).arnaudProject = { token: WRITE, restoring };
     if (operation === "create") return args;
-    const db = await siteTransaction(req);
+    const db = await nativeTransaction(req, "Site");
     const id = "id" in args ? args.id : undefined;
     const result = restoring
       ? await db.execute(sql`select p.edit_revision, p.first_published_at, p.slug from ${table} p join ${versions} v on v.parent_id = p.id where v.id = ${id}::uuid for update of p`)
       : await db.execute(sql`select edit_revision, first_published_at, slug from ${table} where id = ${id}::uuid for update`);
     const row = result.rows[0];
     if (!row) throw new APIError("This project no longer exists. Return to the project list.", 404);
-    const current: Current = { edit_revision: editRevision(row.edit_revision), first_published_at: row.first_published_at as string | null, slug: String(row.slug) };
+    const current: Current = { edit_revision: nativeEditRevision(row.edit_revision, "content"), first_published_at: row.first_published_at as string | null, slug: String(row.slug) };
     const data = "data" in args ? args.data as Record<string, unknown> : {};
-    const statusOnly = Object.keys(data).length === 1 && data._status === "draft";
-    if (!restoring && !statusOnly && data.editRevision !== current.edit_revision) throw new APIError("This project changed in another tab. Reload before saving; saved versions are retained.", 409);
+    const statusOnly = isStatusOnlyUnpublish(data);
+    if (isStaleNativeWrite(data.editRevision, current.edit_revision, { restoring, statusOnly })) throw new APIError("This project changed in another tab. Reload before saving; saved versions are retained.", 409);
     state(req).arnaudProject = { token: WRITE, current, restoring, statusOnly };
     return args;
   };
@@ -79,7 +68,7 @@ function projectCollection(slug: "videos" | "fashion-projects"): CollectionConfi
     data.slug = firstPublishedAt && write.restoring ? current!.slug : nextSlug;
     const publishing = data._status === "published" && !write.restoring;
     data.firstPublishedAt = firstPublishedAt || (publishing ? new Date().toISOString() : null);
-    data.editRevision = (current?.edit_revision ?? 0) + (write.statusOnly ? 0 : 1);
+    data.editRevision = nextNativeRevision(current?.edit_revision ?? 0, write.statusOnly);
     try {
       const merged = { ...originalDoc, ...data };
       if (slug === "fashion-projects") {
@@ -102,7 +91,7 @@ function projectCollection(slug: "videos" | "fashion-projects"): CollectionConfi
       throw new ValidationError({ collection: slug, errors: [{ path: "body", message: (error as Error).message }], req });
     }
     if (operation !== "create" && !write.statusOnly) {
-      const db = await siteTransaction(req);
+      const db = await nativeTransaction(req, "Site");
       await db.execute(sql`update ${table} set edit_revision = ${data.editRevision} where id = ${originalDoc.id}::uuid`);
     }
     return data;

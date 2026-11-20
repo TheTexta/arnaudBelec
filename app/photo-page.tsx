@@ -3,13 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { BloomLayer, type OrbPositions } from "./bloom-layer";
+import { PaletteScene } from "./palette-scene";
 import { eligiblePhotographs, selectPresentationPhotographs, type PhotoGroups, type PhotoMode } from "@/lib/photographs/presentation";
 import { foregroundForBackground } from "@/lib/photographs/page-colours";
 import { imagePlaceholder } from "@/lib/photographs/image-placeholder";
 import { playColourChord } from "@/lib/audio/colour-chords";
 import type { PublicPhotograph } from "@/lib/supabase-public";
-import { GradientOrb, type MeasuredBounds } from "./gradient-orb";
 
 const colours = [
   { id: "slate", name: "palette colour 1", hex: "#7995ae", vx: 7.5, vy: 4.5 },
@@ -81,40 +80,10 @@ function PhotoArchive({ photographs, mode, onModeChange, monochromePreview }: {
   monochromePreview?: PublicPhotograph;
 }) {
   const [selectedColour, setSelectedColour] = useState<ColourId | null>(null);
-  const [hoveredColour, setHoveredColour] = useState<ColourId | null>(null);
   const [displayedColour, setDisplayedColour] = useState<ColourId | null>(null);
   const [isFading, setIsFading] = useState(false);
   const stageRef = useRef<HTMLElement>(null);
   const photoRef = useRef<HTMLElement | null>(null);
-  const boundsRef = useRef<MeasuredBounds | null>(null);
-  const orbPositionsRef = useRef<OrbPositions>({});
-  useEffect(() => {
-    const stage = stageRef.current;
-    const photo = photoRef.current;
-    if (!stage || !photo) return;
-
-    const measure = () => {
-      const stageRect = stage.getBoundingClientRect();
-      const photoRect = photo.getBoundingClientRect();
-      boundsRef.current = {
-        version: (boundsRef.current?.version ?? 0) + 1,
-        width: stageRect.width,
-        height: stageRect.height,
-        photo: {
-          left: photoRect.left - stageRect.left,
-          top: photoRect.top - stageRect.top,
-          right: photoRect.right - stageRect.left,
-          bottom: photoRect.bottom - stageRect.top,
-        },
-      };
-    };
-
-    const observer = new ResizeObserver(measure);
-    observer.observe(stage);
-    observer.observe(photo);
-    measure();
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     if (selectedColour === displayedColour) return;
@@ -182,9 +151,6 @@ function PhotoArchive({ photographs, mode, onModeChange, monochromePreview }: {
     />
   ) : null;
   const setPhotoRef = useCallback((element: HTMLElement | null) => { photoRef.current = element; }, []);
-  const updateOrbPosition = useCallback((id: string, x: number, y: number) => {
-    orbPositionsRef.current[id] = { x, y };
-  }, []);
   const heroClassName = "relative z-2 block w-[min(calc(100vw_-_32px),var(--photo-max-width))] cursor-pointer border-0 bg-white p-0 focus-visible:outline-[3px] focus-visible:outline-offset-[6px] focus-visible:outline-current sm:w-[min(66.6667vw,var(--photo-max-width))]";
 
   return (
@@ -198,31 +164,18 @@ function PhotoArchive({ photographs, mode, onModeChange, monochromePreview }: {
         className="relative isolate grid h-screen w-screen place-items-center"
         aria-label="Select a colour to explore photographs"
       >
-        {heroPhotograph ? <BloomLayer
+        {heroPhotograph ? <PaletteScene
           backgroundColour={pageBackground}
           colours={gradientColours}
-          positionsRef={orbPositionsRef}
           selectedId={selectedColour}
-          hoveredId={hoveredColour}
+          stageRef={stageRef}
+          photoRef={photoRef}
+          onSelect={(_id, index) => {
+            const id = gradientColours[index].id;
+            playColourChord(index);
+            setSelectedColour(current => current === id ? null : id);
+          }}
         /> : null}
-        {heroPhotograph ? gradientColours.map((colour) => (
-          <GradientOrb
-            key={colour.id}
-            colour={colour}
-            paletteSize={gradientColours.length}
-            isSelected={selectedColour === colour.id}
-            isHovered={hoveredColour === colour.id}
-            stageRef={stageRef}
-            boundsRef={boundsRef}
-            positionsRef={orbPositionsRef}
-            onPositionChange={updateOrbPosition}
-            onHoverChange={(hovered) => setHoveredColour((current) => hovered ? colour.id : current === colour.id ? null : current)}
-            onSelect={() => {
-              playColourChord(colours.findIndex((slot) => slot.id === colour.id));
-              setSelectedColour((current) => current === colour.id ? null : colour.id);
-            }}
-          />
-        )) : null}
 
         {heroPhotograph ? (
           heroHref ? (
